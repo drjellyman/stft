@@ -40,7 +40,7 @@ for aaa = 1:nWindowIter
     X1(:,aaa) = X1temp; % This conserves total power, 0 Hz and Nyquist freq are not doubled as they only occur once in the two sided spectrum
 end
 XSum = sum(X1')';
-fScaled = [0:(Fs/2)/(N/2):length(S)]';
+fScaled = [0:(Fs/2)/():length(S)]';
 
 % Approximate snr from mixed signal
 notch1 = designfilt('bandstopfir','PassbandFrequency1', 0.115, ...
@@ -75,13 +75,7 @@ SNRApprox = 10 * log10((sPlusNoisePowerRMS-NoisePowerRMSApprox)/(NoisePowerRMSAp
 SNRApprox = 10 * log10((sPlusNoisePowerRMS)/(NoisePowerRMSApprox))
 
 
-W = fft(w);
-W = W(1:N/2+1);
-W = (1/(Fs*N))*(abs(W).^2);
-W(2:end-1) = 2*W(2:end-1);
-
 figure; plot(t,s); legend('s(t)'); xlabel('t (seconds)'); grid on; 
 figure; plot(S); legend('S(f)'); xlabel('f (Hz)'); grid on; 
 figure; plot(fScaled,XSum); legend('XSum'); xlabel('f (Hz)'); grid on; 
 figure; plot(SFilt1); legend('SFilt1'); xlabel('f (Hz)'); grid on; 
-figure; plot(fScaled,10*log10(W)); legend('W'); xlabel('f (Hz)'); grid on;
