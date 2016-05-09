@@ -29,7 +29,7 @@ w_sum = zeros(n,1); % Use w_sum to check the window sums to 1 over time
 num_win = floor(n/(N/2)) -1;
 for k = 1:num_win
     ywDft(:,k) = fft(y(0.5*N*(k-1)+1 : 0.5*N*(k+1)) .* w); 
-    w_sum(0.5*N*(k-1)+1 : 0.5*N*(k+1)) = w_sum(0.5*N*(k-1)+1 : 0.5*N*(k+1)) + w;
+    w_sum(0.5*N*(k-1)+1 : 0.5*N*(k+1)) = w_sum(0.5*N*(k-1)+1 : 0.5*N*(k+1)) + w.^2;
 end
 
 % Plot the summed window 
@@ -55,5 +55,9 @@ figure; plot(y); hold on; plot(yHat2); legend('y','yHat2'); xlabel('n (samples)'
 ywPsd = (1/N)*(abs(ywDft(1:N/2+1,:)).^2);
 time = linspace(0, t_length, length(ywPsd(1,:)))';
 freq = linspace(0, Fs/2, length(ywPsd(:,1)))';
-figure; subplot(2,1,1); imagesc(time,freq,10*log10(ywPsd)); xlabel('time (s)'); ylabel('frequency (Hz)'); axis xy; 
-subplot(2,1,2); plot(n_dom/Fs,y); xlabel('time (s)'); ylabel('amplitude'); axis tight;
+figure; %subplot(2,1,1); 
+imagesc(time,freq,10*log10(ywPsd)); xlabel('time (s)'); ylabel('frequency (Hz)'); axis xy; colorbar;
+%subplot(2,1,2); plot(n_dom/Fs,y); xlabel('time (s)'); ylabel('amplitude'); axis tight;
+
+% Comparison with matlab stft
+figure; spectrogram(y,w,'yaxis'); 
