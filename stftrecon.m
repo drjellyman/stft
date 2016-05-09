@@ -1,7 +1,7 @@
 close all; clear all;
 
 % Import audio file
-[y,Fs] = audioread('/home/jellymdayl/Documents/phd/Matlab/2000_20140121-1125/50_male_speech_english_ch10_orth_2Y.flac');
+[y,Fs] = audioread('50_male_speech_english_ch10_orth_2Y.flac');
 n = length(y);
 n_dom = [1:n]';
 
@@ -29,9 +29,15 @@ for k = 1:floor(n/(N/2)) -1
     ywDft(:,k) = fft(y(0.5*N*(k-1)+1 : 0.5*N*(k+1)) .* w); 
 end
 
-ywDftSum = sum(ywDft');
+ywDftSum = sum(ywDft')';
 ywSumPsd = (1/N)*(abs(ywDftSum(1:N/2+1)).^2);
+% ywSumPsdInterp = interp(ywSumPsd(1:end-1),975);
 figure; plot(ywSumPsd); legend('ywSumPsd'); xlabel('n (samples)'); grid on; 
+ywSumApprox = ifft(ywDftSum);
+yDown = downsample(y,975);
+figure; plot(ywSumApprox); xlabel('n (samples)'); grid on; 
+hold on; plot(yDown); legend('ywSumApprox','yDown'); 
+
 
 ywPsd = (1/N)*(abs(ywDft(1:N/2+1,:)).^2);
 figure; imagesc(10*log10(flip(ywPsd,1))); xlabel('n (samples)'); 
