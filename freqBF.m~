@@ -8,7 +8,7 @@ NSensors = 4; % The number of sensors
 NSources = 2; % The number of sources
 Fs = 16e3; % The sample rate at the sensors
 roomDim = [10, 5, 3]';
-% velSnd = 334; % The velocity of sound in air (ms^-1)
+velSnd = 334; % The velocity of sound in air (ms^-1)
 
 % Import audio files
 [s1,Fs1] = audioread('50_male_speech_english_ch10_orth_2Y.flac');
@@ -22,8 +22,6 @@ if (length(s1) > length(s2)) s1 = s1(1:length(s1));
 elseif (length(s1) < length(s2)) s2 = s2(1:length(s1));
 end
 sDur = length(s1)/Fs1; % sDur = source duration in seconds
-s = [s1, s2];
-clear s1; clear s2;
 
 % Randomly place sensors and sources
 sensorLocation = diag(roomDim)*rand(3,NSensors); % Each column of sensor_locations gives x,y,z coordinates of a sensor.
@@ -35,8 +33,8 @@ NSamples = sDur/(1/Fs);
 x = zeros(NSamples, NSensors);
 for a = 1:NSources
     for b = 1:NSensors
-        ssd = norm(sensorLocation(:,b) - sourceLocation(:,a)); % ssd = source sensor distance
-        x(:,b) = x(:,b) + resample(delayAndWeight(s(:,a),ssd,Fs),1,(Fs1/Fs)); % delayed and weighted source a
+        ssd = norm(sensorLocation(:,b) - sourceLocation(:,a)) / velSnd; % ssd = source sensor delay
+        x(:,b) = x(:,b) + delayAndWeight(ssd)%delayed and weighted source a
     end
 end
 

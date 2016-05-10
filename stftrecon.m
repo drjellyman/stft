@@ -6,20 +6,17 @@ n = length(y);
 n_dom = [1:n]';
 t_length = length(y)/Fs;
 
-
 % Take full length fft
 ydft = fft(y); % Two sided dft of y
 ypsd = (1/n)*(abs(ydft(1:n/2+1)).^2); % Make one sided, take magnitude, square, and scale
 f = (Fs/(2*(length(ypsd))))*[0:length(ypsd)-1]'; % Freq variable for plot
 figure; plot(f,ypsd); legend('ypsd(f)'); xlabel('f (Hz)'); grid on; 
 
-
 % Reconstruct signal
 yHat1 = ifft(ydft);
 e1 = norm(y-yHat1)
 % figure; plot(n_dom,y,n_dom,yhat,'--'); legend('y(t)','yhat(t)'); xlabel('f (Hz)'); grid on; 
 % It appears to have perfect reconstruction, as expected.
-
 
 % Now the same with STFT
 N = 2^9; % Window length
@@ -33,7 +30,7 @@ for k = 1:num_win
 end
 
 % Plot the summed window 
-figure; plot(w_sum); legend('w\_sum'); xlabel('n (samples)'); grid on; 
+% figure; plot(w_sum); legend('w\_sum'); xlabel('n (samples)'); grid on; 
 
 % Take ifft of each block
 ywIft = ifft(ywDft);
@@ -49,7 +46,7 @@ e2 = norm(y-yHat2)
 e2_minus_e1 = e2-e1
 
 % Plot the two signals y and yHat
-figure; plot(y); hold on; plot(yHat2); legend('y','yHat2'); xlabel('n (samples)'); 
+% figure; plot(y); hold on; plot(yHat2); legend('y','yHat2'); xlabel('n (samples)'); 
 
 % Plot the spectrogram
 ywPsd = (1/N)*(abs(ywDft(1:N/2+1,:)).^2);
@@ -60,4 +57,4 @@ imagesc(time,freq,10*log10(ywPsd)); xlabel('time (s)'); ylabel('frequency (Hz)')
 %subplot(2,1,2); plot(n_dom/Fs,y); xlabel('time (s)'); ylabel('amplitude'); axis tight;
 
 % Comparison with matlab stft
-figure; spectrogram(y,w,'yaxis'); 
+% figure; spectrogram(y,w,'yaxis'); 
