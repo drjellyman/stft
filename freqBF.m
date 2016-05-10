@@ -33,12 +33,19 @@ sourceLocation = diag(roomDim)*rand(3,NSources);
 % on the distance between the source and the sensor
 NSamples = sDur/(1/Fs);
 x = zeros(NSamples, NSensors);
-for a = 1:NSources
-    for b = 1:NSensors
-        ssd = norm(sensorLocation(:,b) - sourceLocation(:,a)); % ssd = source sensor distance
-        x(:,b) = x(:,b) + resample(delayAndWeight(s(:,a),ssd,Fs),1,(Fs1/Fs)); % delayed and weighted source a
-    end
-end
+% for a = 1:NSources
+%     for b = 1:NSensors
+%         ssd = norm(sensorLocation(:,b) - sourceLocation(:,a)); % ssd = source sensor distance
+% %         x(:,b) = x(:,b) + resample(delayAndWeight(s(:,a),ssd,Fs),1,(Fs1/Fs)); % delayed and weighted source a
+%         
+%     end
+% end
 
+x = zeros(499200,1);
+dig = filter(lagrange(3,1.3),1,s(:,1))
+x(:,1) = x(:,1) + dig; % delayed and weighted source a
+
+
+figure; scatter([1:499200], x(:,1),'.'); hold on; scatter([1:499200],s(:,1),'.'); legend('x','s');
 
 
