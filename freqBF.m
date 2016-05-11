@@ -8,7 +8,7 @@ NSensors = 4; % The number of sensors
 NSources = 2; % The number of sources
 Fs = 16e3; % The sample rate at the sensors
 roomDim = [10, 5, 3]';
-% velSnd = 334; % The velocity of sound in air (ms^-1)
+velSnd = 334; % The velocity of sound in air (ms^-1)
 
 % Import audio files
 [s1,Fs1] = audioread('50_male_speech_english_ch10_orth_2Y.flac');
@@ -33,19 +33,37 @@ sourceLocation = diag(roomDim)*rand(3,NSources);
 % on the distance between the source and the sensor
 NSamples = sDur/(1/Fs);
 x = zeros(NSamples, NSensors);
-% for a = 1:NSources
-%     for b = 1:NSensors
-%         ssd = norm(sensorLocation(:,b) - sourceLocation(:,a)); % ssd = source sensor distance
-% %         x(:,b) = x(:,b) + resample(delayAndWeight(s(:,a),ssd,Fs),1,(Fs1/Fs)); % delayed and weighted source a
-%         
-%     end
-% end
+NOrder = 3;
+for a = 1:NSources
+    for b = 1:NSensors
+        ssd = norm(sensorLocation(:,b) - sourceLocation(:,a)); % ssd = source sensor distance (m)
+        ssds = (ssd/velSnd) / (1/Fs1); % Delay between the sensor and source in samples
+        ssdsInt = floor(ssds) - 1; % Split up the delay into an integer and a rational between 1 and 2
+        ssdsSmall = ssds - ssdsInt; 
+        weight = 1/(ssd+1)^2; % Calculate the weight based on the source to sensor distance
+        sTemp = [s(ssdsInt+1:end,a) ; zeros(ssdsInt,1)]; % Delay the source by ssdsInt
+        x(:,b) = x(:,b) + weight * resample(filter(lagrange(NOrder,ssdsSmall),1,sTemp),1,(Fs1/Fs)); % Delay the source by ssdsSmall, then weight and sum into the obervation signal
+    end
+end
 
-x = zeros(499200,1);
-dig = filter(lagrange(3,1.3),1,s(:,1))
-x(:,1) = x(:,1) + dig; % delayed and weighted source a
+% Now STFT
+N = 2^9; % Window length
+nWin = [1:N]';
+w = sqrt(0.5*(1-cos((2*pi*nWin)/(N-1))));
+% w_sum = zeros(n,1); % Use w_sum to check the window sums to 1 over time
+num_win = floor(length(x(:,1))/(N/2)) -1;
+for a = 1:NSensors
+    for k = 1:num_win
+        xwDft(:,k,a) = fft(x(0.5*N*(k-1)+1 : 0.5*N*(k+1), a) .* w ); 
+    end
+end
 
+% % Plot the spectrogram
+% xwPsd = (1/N)*(abs(xwDft(1:N/2+1,:)).^2);
+% time = linspace(0, sDur, length(xwPsd(1,:)))';
+% freq = linspace(0, Fs/2, length(xwPsd(:,1)))';
+% figure; %subplot(2,1,1); 
+% imagesc(time,freq,10*log10(xwPsd)); xlabel('time (s)'); ylabel('frequency (Hz)'); axis xy; colorbar;
 
-figure; scatter([1:499200], x(:,1),'.'); hold on; scatter([1:499200],s(:,1),'.'); legend('x','s');
 
 
