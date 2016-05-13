@@ -86,5 +86,8 @@ for k = 1: numWin
     y(0.5*N*(k-1)+1 : 0.5*N*(k+1)) = y(0.5*N*(k-1)+1 : 0.5*N*(k+1)) + yBlocks(:,k).*w;
 end
 
+%http://download.springer.com/static/pdf/514/bok%253A978-3-540-49127-9.pdf?originUrl=http%3A%2F%2Flink.springer.com%2Fbook%2F10.1007%2F978-3-540-49127-9&token2=exp=1463094477~acl=%2Fstatic%2Fpdf%2F514%2Fbok%25253A978-3-540-49127-9.pdf%3ForiginUrl%3Dhttp%253A%252F%252Flink.springer.com%252Fbook%252F10.1007%252F978-3-540-49127-9*~hmac=307acecabf2e784cc4b023fde23fcfffa5cd6ac6abf27fe8ddd0a4ce65691903
+
+
 
 
