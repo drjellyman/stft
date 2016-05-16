@@ -28,8 +28,8 @@ clear s1; clear s2;
 % Randomly place sensors and sources
 % sensorLocation = diag(roomDim)*rand(3,NSensors); % Each column of sensor_locations gives x,y,z coordinates of a sensor.
 % sourceLocation = diag(roomDim)*rand(3,NSources);
-sensorLocation = [5,3,1 ; 5.01,3,1 ; 5.02,3,1 ; 5.03,3,1]'; % linear array with < 0.5*wavelength spacing @ 16kHz
-sourceLocation = [5.015,1,1 ; 7,1.5,2]';
+sensorLocation = [5,1,1 ; 5.01,1,1 ; 5.02,1,1 ; 5.03,1,1]'; % linear array with < 0.5*wavelength spacing @ 16kHz
+sourceLocation = [5.015,3,1 ; 7,4.5,2]';
 
 % Calculate observation signals x_m, as a mixture of the two sources based
 % on the distance between the source and the sensor
@@ -88,6 +88,9 @@ end
 
 %http://download.springer.com/static/pdf/514/bok%253A978-3-540-49127-9.pdf?originUrl=http%3A%2F%2Flink.springer.com%2Fbook%2F10.1007%2F978-3-540-49127-9&token2=exp=1463094477~acl=%2Fstatic%2Fpdf%2F514%2Fbok%25253A978-3-540-49127-9.pdf%3ForiginUrl%3Dhttp%253A%252F%252Flink.springer.com%252Fbook%252F10.1007%252F978-3-540-49127-9*~hmac=307acecabf2e784cc4b023fde23fcfffa5cd6ac6abf27fe8ddd0a4ce65691903
 
+% Freq domain Frost algorithm ref springer speech processing handbook
+% min W^H(k,l)X(k,l)X^H(k,l)W(k,l) s.t. W^H(k,l)A(k)=1
+% where W is the bf weights, X is the signal post stft, and A is the atf.
 
 
 

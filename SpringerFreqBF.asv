@@ -1,0 +1,16 @@
+clear all; close all; 
+
+% Import audio files
+[s1,Fs1] = audioread('50_male_speech_english_ch10_orth_2Y.flac');
+[s2,Fs2] = audioread('44_soprano_ch17_orth_1Z.flac');
+
+velSnd = 334; % The velocity of sound in air (ms^-1)
+A = zeros(4,4); % freq domain ATF
+K = 4; 
+M = 4; 
+tau = 2.92e-5;
+for k = 1:K
+    for m = 0:M
+        A(k,m+1) = exp(-j*2*pi*tau*m/k);
+    end
+end
