@@ -1,16 +1,20 @@
 clear all; close all; 
 
-% Import audio files
-[s,Fs1] = audioread('50_male_speech_english_ch10_orth_2Y.flac'); % s = source, Fs1 = sampling frequency
-[ns,Fs2] = audioread('44_soprano_ch17_orth_1Z.flac'); % ns = noise stationary, Fs2 = sampling frequency
+% % Import audio files
+% [s,Fs1] = audioread('50_male_speech_english_ch10_orth_2Y.flac'); % s = source, Fs1 = sampling frequency
+% [ns,Fs2] = audioread('44_soprano_ch17_orth_1Z.flac'); % ns = noise stationary, Fs2 = sampling frequency
+% 
+% % Truncate one of the files so they have equivalent lengths
+% if (length(s) > length(ns)) s = s(1:length(s));
+% elseif (length(s) < length(ns)) ns = ns(1:length(s));
+% end
+Fs1 = 16e3; 
+s = 0.01*sin(2*pi*1.5e3*[0:1/Fs1:4]');
+ns = 0.01*sin(2*pi*433*[0:1/Fs1:4]');
 
-% Truncate one of the files so they have equivalent lengths
-if (length(s) > length(ns)) s = s(1:length(s));
-elseif (length(s) < length(ns)) ns = ns(1:length(s));
-end
 
 % STFT
-K = 2^10; % Window length ~ 11 ms @ 48 kHz. How long is too long? 
+K = 2^8; % Window length ~ 11 ms @ 48 kHz. How long is too long? 
 w = sqrt(0.5*(1-cos((2*pi*[1:K]')/(K-1)))); % Sqrt hann window for stft
 L = floor(length(s(:,1))/(K/2)) -1; % The number of windows used across the full length of the input signal
 
@@ -32,7 +36,7 @@ A = exp(-j*2*pi*sTau*[1:M]'*(ones(K,1)./[1:K]')'); % A is meant to be my freq do
 
 % Phase shift the noise to locate in a different spatial region
 NS4 = NS; NS4(:,:,2) = NS; NS4(:,:,3) = NS; NS4(:,:,4) = NS; 
-nTau = 2.92e-5; % Delay between mics for s
+nTau = 100e-3; % Delay between mics for n
 for m = 1:M
     for l = 1:L
         Z(:,l,m) = S(:,l) + (exp(-j*2*pi*nTau*(m-1)*[1:K]') .* NS(:,l)); % Z is the freq domain input to the bf
@@ -71,4 +75,10 @@ for l = 1: L
     y(0.5*K*(l-1)+1 : 0.5*K*(l+1)) = y(0.5*K*(l-1)+1 : 0.5*K*(l+1)) + yBlocks(:,l).*w;
 end
 
-
+plot(real(y))
+YY = fft(y);
+YY = abs(YY/length(y));
+YY = YY(1:length(y)/2+1);
+YY(2:end-1) = 2 * YY(2:end-1);
+f = [0:2*(Fs1/2)/length(y):Fs1/2];
+figure; plot(f,YY)
