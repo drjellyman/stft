@@ -36,7 +36,7 @@ A = exp(-j*2*pi*sTau*[1:M]'*(ones(K,1)./[1:K]')'); % A is meant to be my freq do
 
 % Phase shift the noise to locate in a different spatial region
 NS4 = NS; NS4(:,:,2) = NS; NS4(:,:,3) = NS; NS4(:,:,4) = NS; 
-nTau = 0.001154734411; % Delay between mics for n
+nTau = 0.1;%0.001154734411; % Delay between mics for n
 for m = 1:M
     for l = 1:L
         Z(:,l,m) = S(:,l) + (exp(-j*2*pi*nTau*(m-1)*[1:K]') .* NS(:,l)); % Z is the freq domain input to the bf
