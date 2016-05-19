@@ -26,10 +26,10 @@ s = [s1, s2];
 clear s1; clear s2;
 
 % Randomly place sensors and sources
-% sensorLocation = diag(roomDim)*rand(3,NSensors); % Each column of sensor_locations gives x,y,z coordinates of a sensor.
-% sourceLocation = diag(roomDim)*rand(3,NSources);
-sensorLocation = [5,1,1 ; 5.01,1,1 ; 5.02,1,1 ; 5.03,1,1]'; % linear array with < 0.5*wavelength spacing @ 16kHz
-sourceLocation = [5.015,3,1 ; 7,4.5,2]';
+sensorLocation = diag(roomDim)*rand(3,NSensors); % Each column of sensor_locations gives x,y,z coordinates of a sensor.
+sourceLocation = diag(roomDim)*rand(3,NSources);
+% sensorLocation = [5,1,1 ; 5.01,1,1 ; 5.02,1,1 ; 5.03,1,1]'; % linear array with < 0.5*wavelength spacing @ 16kHz
+% sourceLocation = [5.015,3,1 ; 7,4.5,2]';
 
 % Calculate observation signals x_m, as a mixture of the two sources based
 % on the distance between the source and the sensor

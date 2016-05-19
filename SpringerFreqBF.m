@@ -1,16 +1,16 @@
 clear all; close all; 
 
-% % Import audio files
-% [s,Fs1] = audioread('50_male_speech_english_ch10_orth_2Y.flac'); % s = source, Fs1 = sampling frequency
-% [ns,Fs2] = audioread('44_soprano_ch17_orth_1Z.flac'); % ns = noise stationary, Fs2 = sampling frequency
-% 
-% % Truncate one of the files so they have equivalent lengths
-% if (length(s) > length(ns)) s = s(1:length(s));
-% elseif (length(s) < length(ns)) ns = ns(1:length(s));
-% end
-Fs1 = 16e3; 
-s = 0.01*sin(2*pi*1.5e3*[0:1/Fs1:4]');
-ns = 0.01*sin(2*pi*433*[0:1/Fs1:4]');
+% Import audio files
+[s,Fs1] = audioread('50_male_speech_english_ch10_orth_2Y.flac'); % s = source, Fs1 = sampling frequency
+[ns,Fs2] = audioread('44_soprano_ch17_orth_1Z.flac'); % ns = noise stationary, Fs2 = sampling frequency
+
+% Truncate one of the files so they have equivalent lengths
+if (length(s) > length(ns)) s = s(1:length(s));
+elseif (length(s) < length(ns)) ns = ns(1:length(s));
+end
+% Fs1 = 16e3; 
+% s = 0.01*sin(2*pi*1.5e3*[0:1/Fs1:4]');
+% ns = 0.01*sin(2*pi*433*[0:1/Fs1:4]');
 
 
 % STFT
