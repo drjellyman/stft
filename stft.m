@@ -12,12 +12,12 @@ function [ S ,L] = stft( s, K )
     w = sqrt(0.5*(1-cos((2*pi*[0:K-1]')/(K-1)))); 
     
     % Calculate number of windows
-    L = floor(length(s(:,1))/(K/2)) -1; 
+    L = (length(s)/(K-1))*2 - 1;
     
     % Calculate STFT
-    sp = 1 + floor(K/2) * [0:L]'; % sp = start points of each window
+    sp = 1 + floor(K/2) * [0:L-1]'; % sp = start points of each window
     for l = 1:L
-        S(:,l) = fft(s(sp(l):sp(l)+K-1) .* w);
+        S(:,l) = fft(s(sp(l):sp(l)+K-2) .* w(1:end-1));
     end
 end
 
