@@ -4,8 +4,9 @@ function [ ] = mySpectrogram( X )
     N = length(X(:,1));
     fs = 1/(N-1);
     ts = 1/(length(X(1,:))-1);
-    t = 0:ts:1;
-    f = 0:fs:1;
+    t = 0:ts:1; % Normalized
+    f = 0:fs:1; % Normalized
+
     
     % Plot the spectrogram
     X = X(1:N/2+1,:); % Truncate to one sided spectrum

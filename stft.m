@@ -5,19 +5,24 @@ function [ S ,L] = stft( s, K )
     
     % Check if K is odd, add one if not
     if mod(K,2) ~= 1
-        K = K + 1; 
+        K = K+1; 
     end
+    
+    % Find number of sensors
+    M = length(s(1,:));
     
     % Hann window for stft
     w = sqrt(0.5*(1-cos((2*pi*[0:K-1]')/(K-1)))); 
     
     % Calculate number of windows
-    L = (length(s)/(K-1))*2 - 1;
+    L = (length(s)/(K-1))*2-1;
     
     % Calculate STFT
     sp = 1 + floor(K/2) * [0:L-1]'; % sp = start points of each window
-    for l = 1:L
-        S(:,l) = fft(s(sp(l):sp(l)+K-2) .* w(1:end-1));
+    for m = 1:M
+        for l = 1:L
+            S(:,l,m) = fft(s(sp(l):sp(l)+K-2,m) .* w(1:end-1));
+        end
     end
 end
 
