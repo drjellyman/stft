@@ -15,12 +15,11 @@ function [ z,d] = myObservInterp( zPos,sPos,s,Fs1,Fs,nsWt )
     for a = 1:NSources
         for b = 1:NSensors
             ssd = norm(zPos(:,b) - sPos(:,a)); % ssd = source sensor distance (m)
-            ssds = (ssd/c) / (1/Fs1) ;% Delay between the sensor and source in samples
-            ssdsInt = floor(ssds) - 1 ;% Split up the delay into an integer and a rational between 1 and 2
+            ssds = (ssd/c) / (1/Fs1); % Delay between the sensor and source in samples
+            ssdsInt = floor(ssds) - 1; % Split up the delay into an integer and a rational between 1 and 2
             ssdsSmall = ssds - ssdsInt ;
             weight = 1/(ssd+1); % Calculate the weight based on the source to sensor distance
-%             sTemp = [zeros(ssdsInt,1); s(ssdsInt+1:end,a) ]; % Delay the source by ssdsInt
-            sTemp = [zeros(ssdsInt,1); s(1:end-ssdsInt,a) ]; % Delay the source by ssdsInt
+            sTemp = [zeros(ssdsInt,1); s(ssdsInt+1:end,a) ]; % Delay the source by ssdsInt
             z(:,b) = z(:,b) + weight * resample(filter(lagrange(NOrder,ssdsSmall),1,sTemp),1,(Fs1/Fs)); % Delay the source by ssdsSmall, then weight and sum into the obervation signal
             
             d(a,b) = ssd; % keep track of the distances to be returned (required for computing A, the ATF)
