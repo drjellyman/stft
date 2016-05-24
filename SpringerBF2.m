@@ -58,14 +58,38 @@ nsWt = 0; % nsWt = noise weight
 
 % Calculate A, the acoustic transfer function (ATF)
 c = 343; % c = velocity of sound in air (m.s^-1)
-for k = 1:K
+for k = 1:K%K-1
     for m = 1:NSensors
-        A(k,m) = exp(-j*2*pi*((k-1)*Fs/(K-1))*d(1,m)/c)/d(1,m);
+%         A(k,m) = exp(-j*2*pi*((k-1)*Fs/(K-1))*d(1,m)/c)/d(1,m);
+        A(k,m) = exp(-j*2*pi*((k-1)*Fs/(K-1))*0.5)/d(1,m);
     end
 end
-% 
-% figure; plot(z(:,1)); hold on; 
-% plot(z(:,2));%plot(z(:,3));
+figure; plot(real(fftshift(A(:,1)))); legend('A(:,1)');
+
+ksym = [0:128,-128:-1];
+for k = 1:K%K-1%[0:127,-127:-1]%1:K-1
+    for m = 1:NSensors
+%         Asym(k,m) = exp(-j*2*pi*((ksym(k))*Fs/(K-1))*d(1,m)/c)/d(1,m);
+        Asym(k,m) = exp(-j*2*pi*((ksym(k))*Fs/(K))*0.5)/d(1,m);
+    end
+end
+figure; plot(real(fftshift(Asym(:,1))));legend('Asym(:,1)');
+
+% Use A to create the observations
+sPadded = [zeros((K-1)/2,NSensors) ; s ; zeros((K-1)/2,NSensors)];
+[S,LS] = stft(sPadded,K);
+for l = 1:LS
+    for m = 1:NSensors
+        ZA(:,l,m) = A(1:end-1,m).*S(:,l);
+    end
+end
+za = myNormalize(myOverlapAdd(ZA(:,:,1)));
+za = za(65:end);
+
+zn = myNormalize(z(:,1)); s1n = myNormalize(s1); 
+figure; %plot(zn(358:end),'.'); 
+hold on; plot(s1n); plot(real(za)); legend('s1n','za');
+%plot(z(:,3));
 % plot(z(:,4));plot(z(:,5));
 % plot(z(:,6));plot(z(:,7));
 % plot(z(:,8)); legend('1','2','3','4','5','6','7','8');
@@ -73,6 +97,8 @@ end
 %% STFT on z, use if observation signals already created in t domain
 zPadded = [zeros((K-1)/2,NSensors) ; z ; zeros((K-1)/2,NSensors)];
 [Z,L] = stft(zPadded,K);
+
+% figure; plot(abs(Z(:,34,1)),'.'); hold on; plot(abs(ZA(:,35,1)),'o'); legend('Z','ZA');
 
 %% Delay and Sum
 % What happens if I just find the weights that undo the delay? i.e. W^H*A =
@@ -84,14 +110,15 @@ for l = 1:L
         Y(k,l) = WH(:,k)' * squeeze(Z(k,l,:));
     end
 end
-y = 700*myOverlapAdd(Y);
-y = y(590:end);
-figure; plot(real(y)); hold on; %plot(s1); legend('y','s1');
+y = myNormalize(myOverlapAdd(Y));
+% plot(real(y(358:end)),'--')
+% y = y(590:end);
+% figure; plot(real(y)); hold on; %plot(s1); legend('y','s1');
 % cov(100*real(y((K-1)/2:end-(K-1)/2-1)),s1);
-figure; plot(abs(Y));
-mySpectrogram(Y);
-mySpectrogram(Z(:,:,1));
-figure; plot(s1);hold on;  plot(real(y)); legend('s1','y')
+% figure; plot(abs(Y));
+% mySpectrogram(Y);
+% mySpectrogram(Z(:,:,1));
+% figure; plot(s1);hold on;  plot(real(y)); legend('s1','y')
 
 %% Closed form optimal solution (Springer 47.7) - not suitable for time
 % varying environments. W = ((ZZ^H)^-1 A)/(A^H (ZZ^H)^-1 A) -> (k x l x m)
