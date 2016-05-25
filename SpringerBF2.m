@@ -17,8 +17,8 @@ s1 = s1(start:NSig-1+start); s2 = s2(start:NSig-1+start);
 % s2 = cos(2*pi*541*[1:NSig]'/Fs1);
 
 % For checking timing and ATF
-% s1 = zeros(NSig,1); 
-s2 = zeros(NSig,1);
+s1 = zeros(NSig,1); 
+% s2 = zeros(NSig,1);
 % s1(500:549) = ones(50,1);
 % s1(550:599) = -ones(50,1);
 
@@ -62,6 +62,7 @@ for k = 1:K%K-1
     for m = 1:NSensors
         A(k,m) = exp(-j*2*pi*((k-1)*Fs/(K-1))*d(1,m)/c)/d(1,m);
 %         A(k,m) = exp(-j*2*pi*((k-1)*Fs/(K-1))*0.5)/d(1,m);
+        AN(k,m) = exp(-j*2*pi*((k-1)*Fs/(K-1))*d(2,m)/c)/d(2,m);
     end
 end
 % figure; plot(real(fftshift(A(:,1)))); legend('A(:,1)');
@@ -78,13 +79,13 @@ end
 % figure; plot(real(fftshift(Asym(:,1))));legend('Asym(:,1)');
 
 % Use A to create the observations
-% sPadded = [zeros((K-1)/2,NSensors) ; s ; zeros((K-1)/2,NSensors)];
-% [S,LS] = stft(sPadded,K);
-% for l = 1:LS
-%     for m = 1:NSensors
-%         ZA(:,l,m) = A(1:end-1,m).*S(:,l);
-%     end
-% end
+sPadded = [zeros((K-1)/2,NSensors) ; s ; zeros((K-1)/2,NSensors)];
+[S,LS] = stft(sPadded,K);
+for l = 1:LS
+    for m = 1:NSensors
+        ZA(:,l,m) = (A(1:end-1,m).*S(:,l,1)) + (AN(1:end-1,m).*S(:,l,2));
+    end
+end
 
 % This lot was comparing the signals shifted using A with the original
 % source (with only one source). The trick is to try and get A to be
@@ -180,17 +181,64 @@ end
 % Yfbf(k,l)=W0^H(k)*Z(k,l);
 for l = 1:L
     for k = 1:K-1
-        Yfbf(k,l,:) = conj(squeeze(W0(k,:)))*squeeze(Z(k,l,:));
+        Yfbf(k,l,:) = conj(squeeze(W0(k,:)))*squeeze(ZA(k,l,:));
     end
 end
-yfbfHat = myOverlapAdd(Yfbf);
-yfbfHat = myNormalize(yfbfHat); s1n = myNormalize(s1); 
-figure; plot(1.5*real(yfbfHat(380:end))); hold on ; plot(s1n,'--'); legend('yfbfHat','s1n');
+% yfbfHat = myOverlapAdd(Yfbf);
+% yfbfHat = myNormalize(yfbfHat); s1n = myNormalize(s1); 
+% figure; plot(1.5*real(yfbfHat(380:end))); hold on ; plot(s1n,'--'); legend('yfbfHat','s1n');
 % roughly one quarter of the energy is in the imaginary component, so there
 % is little more than wishful thinking suggesting that the signal will be
 % close to the original source.
 % real(yfbfHat)'*real(yfbfHat) 
 % imag(yfbfHat)'*imag(yfbfHat)
 % mySpectrogram(Yfbf);
+
+% U(k,l)=H^H(k)Z(k,l) Springer 47.18
+H = [ones(K,1), -ones(K,1)];
+% AHH = conj(A)*H
+% for k = 1:K
+%     % Check AHH is on the null space of A
+%     AHH(k) = conj(A(k,:))*H(k,:)';
+% end
+% Yanc(k,l) = G^H(k,l)H^H(k)Z(k,l) Springer 47.22
+G = ones(K,L,NSensors);
+for l = 1:L
+    for k = 1:K-1
+        Yanc(k,l,:) = conj(squeeze(H(k,:)))*squeeze(ZA(k,l,:));
+    end
+end
+% Can't I just take the difference of the z's? 
+% zdiff = z(:,1)-z(:,2); % Yes, but what does that show? This will be  a
+% signal with s1 removed, but it is not equal to s2. It is the weighted sum of two
+% delayed (non-synced) copies of s2.
+% k = 101; l = 101;
+% HHZ = squeeze(H(k,:))*squeeze(Z(k,l,:))
+% yfbf = myOverlapAdd(Yfbf);
+% yanc = myOverlapAdd(Yanc);
+% audiowrite('yanc.flac',real(myNormalize(yanc)),Fs1);
+% audiowrite('yfbf.flac',real(myNormalize(yfbf)),Fs1);
+% figure; plot(real(yfbf)); hold on; plot(real(yanc)); 
+% 
+% Y = Yfbf-Yanc;
+% yHat = myOverlapAdd(Y);
+% % figure;  plot(s1); hold on; plot(real(yHat),'.');
+% corr_s1_yHat = xcorr(s1,real(yHat));
+% [max, ind] = max(corr_s1_yHat);
+% % figure; plot(corr_s1_yHat);
+% yHatnr = myNormalize(real(yHat(380:end)));
+% yHatrn = real(myNormalize(yHat(380:end)));
+% % figure;  plot(myNormalize(s1)); hold on; plot(yHatrn);
+% audiowrite('yHatrn.flac',yHatrn,Fs1);
+% audiowrite('yHatnr.flac',yHatrn,Fs1);
+% audiowrite('z1.flac',myNormalize(z(:,1)),Fs1);
+% zA = myOverlapAdd(ZA);
+% audiowrite('zA1.flac',myNormalize(zA(:,1)),Fs1);
+% 
+% yHat_real = real(yHat)'*real(yHat) 
+% yHat_imag = imag(yHat)'*imag(yHat)
+% 
+% zA_real = real(zA)'*real(zA) 
+% zA_imag = imag(zA)'*imag(zA)
 
 
