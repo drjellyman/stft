@@ -13,7 +13,7 @@ s1 = zeros(length(s1),1);
 % s2 = zeros(length(s2),1);
 
 % Shorten the signals
-NSig = 2^17; % Truncate signals to be a y*0.5 multiple of the window length, where y is an integer.
+NSig = 2^18; % Truncate signals to be a y*0.5 multiple of the window length, where y is an integer.
 start = 29500;
 s1 = s1(start:NSig-1+start); s2 = s2(start:NSig-1+start);
 clear start;
@@ -58,8 +58,26 @@ for ns = 1:NSources
     a = sPos(:,ns) - zmean';
     b = zPos(:,ns) - zmean';
     phi(ns) = atan2(norm(cross(a,b)),dot(a,b));
+    if phi(ns) > pi/2
+        phi(ns) = phi(ns)-pi/2;
+    end
     dzphi(:,ns) = [0:M-1]'*dz*cos(phi(ns))+d(ns);
 end
+dzphi(:,2) = flipud(dzphi(:,2));
+% for ns = 1:NSources 
+%     dib(ns) = atan(norm(cross(sPos(:,ns)-zmean',sPos(:,ns)-zPos(:,i(ns))))); % di = dinitial for planar wave so trades between first and last sensors, i.e. 1st sensor is delayed less, 
+% end
+% for ns = 1:NSources
+%     dzi(ns) = norm(sPos(:,ns)-zPos(:,i(ns)))*cos(dib(ns));
+% end
+% 
+% for ns = 1:NSources
+%     a = zmean - sPos(:,ns)';
+%     b = zmean - (zmean+[0,2,0]);
+%     phi(ns) = atan2(norm(cross(a,b)),dot(a,b));
+%     dzphi(:,ns) = [0:M-1]'*dz*cos(phi(ns))+dzi(ns);
+% end
+
 
 
 %% Create atf for both sources
@@ -81,30 +99,31 @@ end
 
 %% ifft of Z1 (sensor 1)
 Z1 = squeeze(Z(:,:,1));
-Z2 = squeeze(Z(:,:,2));
+Z8 = squeeze(Z(:,:,8));
 % Z1 = [zeros(1,L) ; Z1 ; zeros(1,L) ; (flipud(Z1)) ; zeros(1,L)];
 % mySpectrogram(Z1)
 z1 = myOverlapAdd(Z1);
-z2 = myOverlapAdd(Z2);
-figure; plot(myNormalize(z1)); hold on; plot(myNormalize(z2));
+z8 = myOverlapAdd(Z8);
+figure; plot(myNormalize(z1)); hold on; plot(myNormalize(z8));
 
 %% Filter and sum fixed bf
 % W0 = A/||A||^2
 for l = 1:L
     for m = 1:M
-        W0(:,l,m) = A(:,m)/(norm(A(:,m))^2);
+        W0(:,l,m) = pinv(A(:,m)); %A(:,m)/(norm(A(:,m))^2);
     end
 end
 % Yfbf = W0^H * Z
 for l = 1:L
     for m = 1:M
-        W0Z(:,l,m) = squeeze(W0(:,l,m)).*squeeze(Z(:,l,m));
+        W0Z(:,l,m) = squeeze(conj(W0(:,l,m))).*squeeze(Z(:,l,m));
     end
 end
 Yfbf = sum(W0Z,3);
 %% ifft of Yfbf 
 yfbf = myOverlapAdd(Yfbf);
-
+figure; plot(myNormalize(abs(fft(yfbf)))); hold on;
+plot(abs(myNormalize(fft(s(:,2)))));
 
 
 
