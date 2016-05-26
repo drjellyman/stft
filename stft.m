@@ -17,11 +17,13 @@ function [ S ,L] = stft( s, K )
     % Calculate number of windows
     L = (length(s)/(K-1))*2-1;
     
+    s = [s;0];
+    
     % Calculate STFT
     sp = 1 + floor(K/2) * [0:L-1]'; % sp = start points of each window
     for m = 1:M
         for l = 1:L
-            S(:,l,m) = fft(s(sp(l):sp(l)+K-2,m) .* w(1:end-1));
+            S(:,l,m) = fft(s(sp(l):sp(l)+K-1,m) .* w(1:end));
         end
     end
 end
