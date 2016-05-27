@@ -5,16 +5,16 @@ close all; clear all;
 [s1,fs] = audioread('50_male_speech_english_ch10_orth_2Y.flac'); % s = source, Fs1 = sampling frequency
 [s2,Fs2] = audioread('44_soprano_ch17_orth_1Z.flac'); % ns = noise stationary, Fs2 = sampling frequency
 
-% s1 = resample(s1,1,3);
-% s2 = resample(s2,1,3);
-% fs = fs/3;
+s1 = resample(s1,1,3);
+s2 = resample(s2,1,3);
+fs = fs/3;
 
 % s1 = zeros(length(s1),1);
 % s2 = zeros(length(s2),1);
 
 % Shorten the signals
-NSig = 2^17; % Truncate signals to be a y*0.5 multiple of the window length, where y is an integer.
-start = 1;
+NSig = 2^16; % Truncate signals to be a y*0.5 multiple of the window length, where y is an integer.
+start = 900;
 s1 = s1(start:NSig-1+start); s2 = s2(start:NSig-1+start);
 s = [s1,s2]; 
 
@@ -42,8 +42,8 @@ dz = 0.9; % ds = distance between sensors
 zPos = ones(3,M);
 zPos(1,:) = zPos(1,:).*([0:M-1]*dz+1);
 sPos = [1,2,1 ; 8,2.5,1]';
-figure; plot3(zPos(1,:),zPos(2,:),zPos(3,:),'o',sPos(1,:),sPos(2,:),sPos(3,:),'*'); grid on; 
-xlabel('x'); ylabel('y'); zlabel('z'); xlim([0, 9]); ylim([0,5]); zlim([0,3]); 
+% figure; plot3(zPos(1,:),zPos(2,:),zPos(3,:),'o',sPos(1,:),sPos(2,:),sPos(3,:),'*'); grid on; 
+% xlabel('x'); ylabel('y'); zlabel('z'); xlim([0, 9]); ylim([0,5]); zlim([0,3]); 
 
 % Find the minimum distance from each source to the array
 for m = 1:M
@@ -115,7 +115,7 @@ c = 343; % Speed of sound in m.s^-1
 kdom = (fs/(K-1)) * [0:(K-1)/2 , -(K-1)/2:-1]';
 for m = 1:M
     A(:,m) = exp(-j*2*pi*kdom'*D(m,1)/c) ;%/ D(m,1);
-    A2(:,m) = exp(-j*2*pi*kdom'*D(m,2)/c);%/ D(m,2);
+    A2(:,m) = exp(-j*2*pi*kdom'*D(m,2)/c) ;%/ D(m,2);
 end
 
 %% Create observations
@@ -156,8 +156,6 @@ for k=1:K
         ZZ(k,l,:) = A(k,:)'.*squeeze(Z(k,l,:));
     end    
 end
-Yfbf = sum(ZZ,3);
-
 % figure; hold on;
 % for m=1:M
 %     zz(:,m) = myOverlapAdd(ZZ(:,:,m));
@@ -174,23 +172,12 @@ for k=1:K
     end
 end
 W = ones(K,M-1);
-Y = zeros(K,L);
-mu = 0.8;
 for l=1:L
     ZZZZ = W(:,:).*squeeze(ZZZ(:,l,:));
-    muNorm = mu/(squeeze(sum(ZZZ(:,l,:),3))'*squeeze(sum(ZZZ(:,l,:),3)))
     Yanc = sum(ZZZZ,2);
-    Y(:,l) = Yfbf(:,l)-Yanc;
-    for k=1:K
-        W(k,:) = W(k,:)+muNorm*Y(k,l)*squeeze(ZZZ(k,l,:)).';%MLS 
-    end
+    Y(:)
+    W(:,:) = W(:,:) + mu*
 end
-y = myOverlapAdd(Y);
-figure; plot(y);
-
-% What can I compare it to? sum(ZZ)?
-ZZsum = sum(ZZ,3);
-zzsum = myOverlapAdd(ZZsum);
 
 %% ifft of Yfbf 
 % yfbf = myOverlapAdd(Yfbf);
