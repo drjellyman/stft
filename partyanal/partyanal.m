@@ -96,47 +96,47 @@ for n=1:nInc:N-nWin  % iterate over 20ms windows
 end
 close(hwt)
 
-% Masking
-x = zeros(nWin, M);  % Current window of audio data
-yDsb1 = zeros(N, 1); % delay-sum beamformer output
-hwt = waitbar(0,'Beamformer: DSB with TF Masking');
-for n=1:nInc:N-nWin  % iterate over 20ms windows
-    % For each 20ms window save the previous and open the new
-    xPrev = x;  x = yin(n:n+nWin-1,:);
-    dum = dsb(x, xPrev, fs, s.mike, m, c); % run
-    yDsb1(n:n+nWin-1)  = yDsb1(n:n+nWin-1) + dum.*hwin;
-    waitbar(n/(4*N),hwt);
-end
-x = zeros(nWin, M);  % Current window of audio data
-yDsb2 = zeros(N, 1); % delay-sum beamformer output
-for n=1:nInc:N-nWin  % iterate over 20ms windows
-    % For each 20ms window save the previous and open the new
-    xPrev = x;  x = yin(n:n+nWin-1,:);
-    dum = dsb(x, xPrev, fs, s.kate, m, c); % run
-    yDsb2(n:n+nWin-1)  = yDsb2(n:n+nWin-1) + dum.*hwin;
-    waitbar(1/4+n/(4*N),hwt);
-end
-x = zeros(nWin, M);  % Current window of audio data
-yDsb3 = zeros(N, 1); % delay-sum beamformer output
-for n=1:nInc:N-nWin  % iterate over 20ms windows
-    % For each 20ms window save the previous and open the new
-    xPrev = x;  x = yin(n:n+nWin-1,:);
-    dum = dsb(x, xPrev, fs, s.phil, m, c); % run
-    yDsb3(n:n+nWin-1)  = yDsb3(n:n+nWin-1) + dum.*hwin;
-    waitbar(2/4+n/(4*N),hwt);
-end
-x = zeros(nWin, M);  % Current window of audio data
-yDsb4 = zeros(N, 1); % delay-sum beamformer output
-for n=1:nInc:N-nWin  % iterate over 20ms windows
-    % For each 20ms window save the previous and open the new
-    xPrev = x;  x = yin(n:n+nWin-1,:);
-    dum = dsb(x, xPrev, fs, s.donohue, m, c); % run
-    yDsb4(n:n+nWin-1)  = yDsb4(n:n+nWin-1) + dum.*hwin;
-    waitbar(3/4+n/(4*N),hwt);
-end
-% yMask = tfmask([yDsb1, yDsb2, yDsb3, yDsb4],1,tWin,4,fs);
-
-close(hwt)
+% % Masking
+% x = zeros(nWin, M);  % Current window of audio data
+% yDsb1 = zeros(N, 1); % delay-sum beamformer output
+% hwt = waitbar(0,'Beamformer: DSB with TF Masking');
+% for n=1:nInc:N-nWin  % iterate over 20ms windows
+%     % For each 20ms window save the previous and open the new
+%     xPrev = x;  x = yin(n:n+nWin-1,:);
+%     dum = dsb(x, xPrev, fs, s.mike, m, c); % run
+%     yDsb1(n:n+nWin-1)  = yDsb1(n:n+nWin-1) + dum.*hwin;
+%     waitbar(n/(4*N),hwt);
+% end
+% x = zeros(nWin, M);  % Current window of audio data
+% yDsb2 = zeros(N, 1); % delay-sum beamformer output
+% for n=1:nInc:N-nWin  % iterate over 20ms windows
+%     % For each 20ms window save the previous and open the new
+%     xPrev = x;  x = yin(n:n+nWin-1,:);
+%     dum = dsb(x, xPrev, fs, s.kate, m, c); % run
+%     yDsb2(n:n+nWin-1)  = yDsb2(n:n+nWin-1) + dum.*hwin;
+%     waitbar(1/4+n/(4*N),hwt);
+% end
+% x = zeros(nWin, M);  % Current window of audio data
+% yDsb3 = zeros(N, 1); % delay-sum beamformer output
+% for n=1:nInc:N-nWin  % iterate over 20ms windows
+%     % For each 20ms window save the previous and open the new
+%     xPrev = x;  x = yin(n:n+nWin-1,:);
+%     dum = dsb(x, xPrev, fs, s.phil, m, c); % run
+%     yDsb3(n:n+nWin-1)  = yDsb3(n:n+nWin-1) + dum.*hwin;
+%     waitbar(2/4+n/(4*N),hwt);
+% end
+% x = zeros(nWin, M);  % Current window of audio data
+% yDsb4 = zeros(N, 1); % delay-sum beamformer output
+% for n=1:nInc:N-nWin  % iterate over 20ms windows
+%     % For each 20ms window save the previous and open the new
+%     xPrev = x;  x = yin(n:n+nWin-1,:);
+%     dum = dsb(x, xPrev, fs, s.donohue, m, c); % run
+%     yDsb4(n:n+nWin-1)  = yDsb4(n:n+nWin-1) + dum.*hwin;
+%     waitbar(3/4+n/(4*N),hwt);
+% end
+% % yMask = tfmask([yDsb1, yDsb2, yDsb3, yDsb4],1,tWin,4,fs);
+% 
+% close(hwt)
 
 
 
@@ -242,10 +242,10 @@ audiowrite('yRobustGsc.wav',yRobustGsc/(sqrt(2)*max(yRobustGsc)),fs);
 % pause(length(yMask)/fs)
 % close(hwt)
 
-http://ieeexplore.ieee.org/xpl/login.jsp?tp=&arnumber=790650&url=http%3A%2F%2Fieeexplore.ieee.org%2Fxpls%2Fabs_all.jsp%3Farnumber%3D790650
-http://www3.ntu.edu.sg/home/ezplin/papers/SPL_04.pdf
-http://wolfgangherbordt.de/resources/Herbordt-springer03-Adaptive_beamforming_for_audio_signal_acquisition.pdf
-https://arxiv.org/ftp/arxiv/papers/1212/1212.6080.pdf
-http://vis.uky.edu/distributed-audio-lab/contents/beamforming-functions/
-http://nt.uni-paderborn.de/en/research/speech-signal-processing-and-speech-recogniton/microphone-arrays/
-http://www.engr.uky.edu/~donohue/audio/Arrays/MAToolbox.htm#_Simulation_functions:
+% http://ieeexplore.ieee.org/xpl/login.jsp?tp=&arnumber=790650&url=http%3A%2F%2Fieeexplore.ieee.org%2Fxpls%2Fabs_all.jsp%3Farnumber%3D790650
+% http://www3.ntu.edu.sg/home/ezplin/papers/SPL_04.pdf
+% http://wolfgangherbordt.de/resources/Herbordt-springer03-Adaptive_beamforming_for_audio_signal_acquisition.pdf
+% https://arxiv.org/ftp/arxiv/papers/1212/1212.6080.pdf
+% http://vis.uky.edu/distributed-audio-lab/contents/beamforming-functions/
+% http://nt.uni-paderborn.de/en/research/speech-signal-processing-and-speech-recogniton/microphone-arrays/
+% http://www.engr.uky.edu/~donohue/audio/Arrays/MAToolbox.htm#_Simulation_functions:
