@@ -5,12 +5,12 @@ close all; clear all;
 [s1,fs] = audioread('50_male_speech_english_ch10_orth_2Y.flac'); % s = source, Fs1 = sampling frequency
 [s2,Fs2] = audioread('44_soprano_ch17_orth_1Z.flac'); % ns = noise stationary, Fs2 = sampling frequency
 
-s1 = resample(s1,1,3);
-s2 = resample(s2,1,3);
-fs = fs/3;
+s1 = resample(s1,1,6);
+s2 = resample(s2,1,6);
+fs = fs/6;
 
 % s1 = zeros(length(s1),1);
-s2 = zeros(length(s2),1);
+% s2 = zeros(length(s2),1);
 
 % Shorten the signals
 NSig = 2^16; % Truncate signals to be a y*0.5 multiple of the window length, where y is an integer.
@@ -32,62 +32,78 @@ s2Padded = [zeros((K-1)/2,1);s(:,2);zeros((K-1)/2,1)];
 %% Place sensors
 NSources = length(s(1,:));
 M = 8; % M = number of sensors
-dz = 0.06; % ds = distance between sensors
+dz = 0.3; % ds = distance between sensors
 zPos = ones(3,M);
 zPos(1,:) = zPos(1,:).*([0:M-1]*dz+1);
-sPos = [1,2,1 ; 8,2.5,1]';
+% sPos = [1,2,1 ; 8,2.5,1]';
+sAng = [pi/3 0]'; %(degrees)
 % figure; plot3(zPos(1,:),zPos(2,:),zPos(3,:),'o',sPos(1,:),sPos(2,:),sPos(3,:),'*'); grid on; 
 % xlabel('x'); ylabel('y'); zlabel('z'); xlim([0, 9]); ylim([0,5]); zlim([0,3]); 
 
 % Find the minimum distance from each source to the array
-for m = 1:M
-    for ns = 1:NSources
-        dmin(m,ns) = norm(sPos(:,ns)-zPos(:,m));
-    end
-end
-[dmin,i] = min(dmin);     % d contains the minimum distance, i contains the index of the closest sensor
-zmean = mean(zPos')';
+% for m = 1:M
+%     for ns = 1:NSources
+%         dmin(m,ns) = norm(sPos(:,ns)-zPos(:,m));
+%     end
+% end
+% [dmin,i] = min(dmin);     % d contains the minimum distance, i contains the index of the closest sensor
+% zmean = mean(zPos')';
 
 % find the delay (in meters) between sensors for each source
 % theta = acos(u'*v/(norm(u)*norm(v)));
-u = sPos-repmat(zmean,1,NSources);
-v = (zmean+[0,1,0]')-zmean;
-for ns = 1:NSources
-    theta(ns) = acos((u(:,ns)'*v)/(norm(u(:,ns))*norm(v)));
-    d(ns) = dz*sin(theta(ns));
-end
+% u = sPos-repmat(zmean,1,NSources);
+% v = (zmean+[0,1,0]')-zmean;
+% for ns = 1:NSources
+%     theta(ns) = acos((u(:,ns)'*v)/(norm(u(:,ns))*norm(v)));
+%     d(ns) = dz*sin(theta(ns));
+% end
+c = 343; % Speed of sound in m.s^-1
+dt = dz*sin(sAng)/c; % dt = time delay between sensors
+
+
 
 % Find the initial delay (in meters) for both sensors
-for ns = 1:NSources
-    di(ns) = norm(u(:,ns))-((M-1)/2)*d(ns);
-end
+% for ns = 1:NSources
+%     di(ns) = norm(u(:,ns))-((M-1)/2)*d(ns);
+% end
 
 % Make delay vectors for ATF
-D = [[0:M-1]'*d(1)+di(1),[0:M-1]'*d(2)+di(2)];
+% D = [[0:M-1]'*d(1)+di(1),[0:M-1]'*d(2)+di(2)];
+
 
 % Flip delay vectors for sources that hit sensor 8 first
-for ns = 1:NSources
-    if i(ns) == M
-        D(:,ns) = flipud(D(:,ns));
-    end
-end
+% for ns = 1:NSources
+%     if i(ns) == M
+%         D(:,ns) = flipud(D(:,ns));
+%     end
+% end
 
 %% Create atf for both sources
-c = 343; % Speed of sound in m.s^-1
+% c = 343; % Speed of sound in m.s^-1
 % kdom = [1:K]'*fs/(K-1);
 % kdom = [0:K-1]'*fs/(K-1);
 kdom = (fs/(K-1)) * [0:(K-1)/2 , -(K-1)/2:-1]';
 for m = 1:M
-    A(:,m) = exp(-j*2*pi*kdom'*D(m,1)/c) ;%/ D(m,1);
-    A2(:,m) = exp(-j*2*pi*kdom'*D(m,2)/c);%/ D(m,2);
+%     A(:,m) = exp(-j*2*pi*kdom'*D(m,1)/c) ;%/ D(m,1);
+%     A2(:,m) = exp(-j*2*pi*kdom'*D(m,2)/c);%/ D(m,2);
+        A(:,m) = exp(-j*2*pi*kdom'*m*dt(1)) ;%/ D(m,1);
+        A2(:,m) = exp(-j*2*pi*kdom'*m*dt(2));%/ D(m,2);
 end
 
 %% Create observations
+Z = zeros(K,L,M);
 for l = 1:L
     for m = 1:M
-        Z(:,l,m) = A(:,m).*S1(:,l)+A2(:,m).*S2(:,l); %A(:,m).*
+        Z(:,l,m) = A(:,m).*S1(:,l)+A2(:,m).*S2(:,l) ;%+ Noise(:); %A(:,m).*
     end
 end
+ %% Create target free observations for noise correlation
+%  Zn = zeros(K,L,M);
+%  for l = 1:L
+%     for m = 1:M
+%         Zn(:,l,m) = A2(:,m).*S2(:,l); %A(:,m).*
+%     end
+% end
 
 % check time domain 
 for m=1:M
@@ -104,25 +120,48 @@ mxi-length(z(:,1))
 %% GSC - Griffiths + Jim freq domain
 % Dayle version
 % ZZ is wiht the look direction re-aligned
-% for k=1:K
-%     for l=1:L
-%         ZZ(k,l,:) = A(k,:)'.*squeeze(Z(k,l,:));
-%     end    
+for k=1:K
+    for l=1:L
+        ZZ(k,l,:) = (A(k,:)/(norm(A(k,:))^2))'.*squeeze(Z(k,l,:));
+    end    
+end
+Yfbf = sum(ZZ,3);
+yfbf = myOverlapAdd(Yfbf);
+
+
+
+
+% blocking matrix
+B = zeros(M-1,M);
+for m = 1:M-1
+    B(m,m:m+1) = [1,-1];
+end
+
+
+
+
+% ZZZ is post blocking matrix
+for k=1:K
+    for l=1:L
+        ZZZ(k,l,:) = B*squeeze(ZZ(k,l,:));
+    end
+end
+
+% check time domain 
+% for m=1:M-1
+%     chk(:,m) = myOverlapAdd(ZZZ(:,:,m));
 % end
-% Yfbf = sum(ZZ,3);
-% 
-% % blocking matrix
-% B = zeros(M-1,M);
-% for m = 1:M-1
-%     B(m,m:m+1) = [1,-1];
-% end
-% % ZZZ is post blocking matrix
-% for k=1:K
-%     for l=1:L
-%         ZZZ(k,l,:) = B*squeeze(ZZ(k,l,:));
-%     end
-% end
-% % ZZZZ is post blocking matrix and post adaptive weights
+% figure; hold on; 
+% plot(chk(:,1)); plot(chk(:,3))
+% legend('1','7');
+% xc12 = xcorr(chk(:,1),chk(:,3));
+% figure; plot(xc12)
+% [mx, mxi] = max(xc12)
+% mxi-length(chk(:,1))
+
+
+
+% ZZZZ is post blocking matrix and post adaptive weights
 % W = ones(K,M-1);
 % Y = zeros(K,L);
 % mu = 0.21;
@@ -142,7 +181,67 @@ mxi-length(z(:,1))
 % % % What can I compare it to? sum(ZZ)?
 % ZZsum = sum(ZZ,3);
 % zzsum = myOverlapAdd(ZZsum);
-% audiowrite('zzsum.flac',myNormalize(zzsum),fs);
+% % audiowrite('zzsum.flac',myNormalize(zzsum),fs);
+
+%% Try another R by summing over l (for mvdr)
+for k=1:K
+    R = zeros(M,M);
+    for l=1:L
+        Ztmp = squeeze(Z(k,l,:));
+        R = R + Ztmp*Ztmp';
+    end
+    R = R + 1e-9*eye(M);
+    Rinv = inv(R);
+    Ak = A(k,:).';
+    W(k,:) = Rinv*Ak/(Ak'*Rinv*Ak);
+end
+
+Y = zeros(K,L);
+for l=1:L
+    Ztmp = squeeze(Z(:,l,:));
+    Y(:,l) = sum(conj(W).*Ztmp,2).';
+end
+y = myOverlapAdd(Y);
+figure; plot(y);
+sound(y,fs);
+
+%% ANC G, adaptive noise canceller
+
+% create actual noise psd
+% Znm = zeros(M,1);
+% Rnnk=zeros(K,M,M);
+% for k=1:K
+%     Rnn = zeros(M,M);
+%     for  l=1:L
+%         Znm = squeeze(Zn(k,l,:));
+%         Rnn = Rnn + Znm*Znm';
+%     end
+%     Rnnk(k,:,:) = 1/L*Rnn;
+% end
+% 
+% G = zeros(K,L);
+% for k=1:K
+%     for m=1:M
+%         G(:,:) = inv(B(k,l)'*Rnnk(k,:,:)*B(k,l))*B(k,l)'*Rnnk(k,:,:)*(A(k,:)/(norm(A(k,:))^2))';
+%     end
+% end
+% G = 
+
+
+% Rnn = zeros(K,M);
+% 
+% 
+% for k=1:K
+%     for l=1:L
+%         Rnn(k,:) = 
+%     end
+% end
+
+% for k = 1:K
+%     for l = 1:L
+%         G() = inv(B'  B )
+%     end
+% end
 
 %% MVDR using analytical solution i.e. optimal weights
 % W = (R^-1*A) * (A*R^-1*A)^-1 % From Lorenz and Boyd, Robust Minimum Variance

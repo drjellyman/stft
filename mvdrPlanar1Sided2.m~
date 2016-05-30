@@ -10,7 +10,7 @@ s2 = resample(s2,1,3);
 fs = fs/3;
 
 % s1 = zeros(length(s1),1);
-s2 = zeros(length(s2),1);
+% s2 = zeros(length(s2),1);
 
 % Shorten the signals
 NSig = 2^16; % Truncate signals to be a y*0.5 multiple of the window length, where y is an integer.
@@ -28,11 +28,12 @@ s2Padded = [zeros((K-1)/2,1);s(:,2);zeros((K-1)/2,1)];
 % Take stft of both sources
 [S1,L] = stft(s1Padded,K);
 [S2,L2] = stft(s2Padded,K);
+clear L2;
 
 %% Place sensors
 NSources = length(s(1,:));
 M = 8; % M = number of sensors
-dz = 0.06; % ds = distance between sensors
+dz = 0.9; % ds = distance between sensors
 zPos = ones(3,M);
 zPos(1,:) = zPos(1,:).*([0:M-1]*dz+1);
 sPos = [1,2,1 ; 8,2.5,1]';
@@ -90,16 +91,12 @@ for l = 1:L
 end
 
 % check time domain 
+figure; hold on; 
 for m=1:M
     z(:,m) = myOverlapAdd(Z(:,:,m));
+    plot(z(:,m));
 end
-figure; hold on; 
-plot(z(:,1)); plot(z(:,8))
-legend('1','8');
-xc12 = xcorr(z(:,1),z(:,8));
-figure; plot(xc12)
-[mx, mxi] = max(xc12)
-mxi-length(z(:,1))
+legend('1','2','','','','','','');
 
 %% GSC - Griffiths + Jim freq domain
 % Dayle version
