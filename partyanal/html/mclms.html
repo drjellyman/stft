@@ -1,0 +1,355 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>Multiple-Input Canceller LMS Filter</title><meta name="generator" content="MATLAB 8.6"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2016-05-31"><meta name="DC.source" content="mclms.m"><style type="text/css">
+html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,font,img,ins,kbd,q,s,samp,small,strike,strong,sub,sup,tt,var,b,u,i,center,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td{margin:0;padding:0;border:0;outline:0;font-size:100%;vertical-align:baseline;background:transparent}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:before,blockquote:after,q:before,q:after{content:'';content:none}:focus{outine:0}ins{text-decoration:none}del{text-decoration:line-through}table{border-collapse:collapse;border-spacing:0}
+
+html { min-height:100%; margin-bottom:1px; }
+html body { height:100%; margin:0px; font-family:Arial, Helvetica, sans-serif; font-size:10px; color:#000; line-height:140%; background:#fff none; overflow-y:scroll; }
+html body td { vertical-align:top; text-align:left; }
+
+h1 { padding:0px; margin:0px 0px 25px; font-family:Arial, Helvetica, sans-serif; font-size:1.5em; color:#d55000; line-height:100%; font-weight:normal; }
+h2 { padding:0px; margin:0px 0px 8px; font-family:Arial, Helvetica, sans-serif; font-size:1.2em; color:#000; font-weight:bold; line-height:140%; border-bottom:1px solid #d6d4d4; display:block; }
+h3 { padding:0px; margin:0px 0px 5px; font-family:Arial, Helvetica, sans-serif; font-size:1.1em; color:#000; font-weight:bold; line-height:140%; }
+
+a { color:#005fce; text-decoration:none; }
+a:hover { color:#005fce; text-decoration:underline; }
+a:visited { color:#004aa0; text-decoration:none; }
+
+p { padding:0px; margin:0px 0px 20px; }
+img { padding:0px; margin:0px 0px 20px; border:none; }
+p img, pre img, tt img, li img, h1 img, h2 img { margin-bottom:0px; } 
+
+ul { padding:0px; margin:0px 0px 20px 23px; list-style:square; }
+ul li { padding:0px; margin:0px 0px 7px 0px; }
+ul li ul { padding:5px 0px 0px; margin:0px 0px 7px 23px; }
+ul li ol li { list-style:decimal; }
+ol { padding:0px; margin:0px 0px 20px 0px; list-style:decimal; }
+ol li { padding:0px; margin:0px 0px 7px 23px; list-style-type:decimal; }
+ol li ol { padding:5px 0px 0px; margin:0px 0px 7px 0px; }
+ol li ol li { list-style-type:lower-alpha; }
+ol li ul { padding-top:7px; }
+ol li ul li { list-style:square; }
+
+.content { font-size:1.2em; line-height:140%; padding: 20px; }
+
+pre, code { font-size:12px; }
+tt { font-size: 1.2em; }
+pre { margin:0px 0px 20px; }
+pre.codeinput { padding:10px; border:1px solid #d3d3d3; background:#f7f7f7; }
+pre.codeoutput { padding:10px 11px; margin:0px 0px 20px; color:#4c4c4c; }
+pre.error { color:red; }
+
+@media print { pre.codeinput, pre.codeoutput { word-wrap:break-word; width:100%; } }
+
+span.keyword { color:#0000FF }
+span.comment { color:#228B22 }
+span.string { color:#A020F0 }
+span.untermstring { color:#B20000 }
+span.syscmd { color:#B28C00 }
+
+.footer { width:auto; padding:10px 0px; margin:25px 0px 0px; border-top:1px dotted #878787; font-size:0.8em; line-height:140%; font-style:italic; color:#878787; text-align:left; float:none; }
+.footer p { margin:0px; }
+.footer a { color:#878787; }
+.footer a:hover { color:#878787; text-decoration:underline; }
+.footer a:visited { color:#878787; }
+
+table th { padding:7px 5px; text-align:left; vertical-align:middle; border: 1px solid #d6d4d4; font-weight:bold; }
+table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px solid #d6d4d4; }
+
+
+
+
+
+  </style></head><body><div class="content"><h1>Multiple-Input Canceller LMS Filter</h1><!--introduction--><p>Apply an LMS filter to each output track of a GSC blocking matrix, summing the output of the filters at each iteration and subtracting from a fixed beamformer signal to generate the overall bemaformer output.  The output signal is rerouted to the adaptive filters as the error signal so that target signal power is suppressed, causing a purer noise signal to be subtracted from the delay and sum beamformer.  In addition, a norm-constaint can be placed on the LMS taps to help guide their adaptation.</p><p><b>Syntax</b></p><p><tt>[y, wSave] = mclms(z, b, mu, order, beta, zInit, wInit,      wForce, mcAdapt, K)</tt></p><p><b>Required Inputs</b></p><div><ul><li><tt>z</tt> - Matrix of blocking matrix outputs, each column a track</li><li><tt>b</tt> - Column vector of Delay and Sum beamformer output</li><li><tt>mu</tt> - Step size of adaptation.  This algorithm uses the     normalized LMS variant so mu must be in [0,2] to ensure     stability.</li><li><tt>order</tt> - Order of the adaptive filter.</li><li><tt>beta</tt> - Leakage coefficient (forgetting factor).  Beta must be in     [0,1], where 0 implies zero memory and 1 implies no forgetting     (neither extreme is likely to be very helpful).</li></ul></div><p><b>Optional Inputs</b></p><div><ul><li><tt>zInit</tt> - Vector of values to be initially fed into the adaptive     filter inputs ahead of bm.  For a windowed application this can     allow for seamless transition between windows without data at     window boundaries losing time in the filter.  If initial values     aren't needed, simply set to zeros.</li><li><tt>wInit</tt> - Matrix of tap weights for the first iteration.  This is     good for ensuring that runs over audio windows flow smoothly, To     avoid forcing this initial value, supply []</li><li><tt>wForce</tt> - Matrix of tap weights to force the filters into using,     rather than adapting.  This is useful for recreating a previous     run with the same filter behavior.  To avoid forcing weights,     supply []</li><li><tt>K</tt> - Specifies the threshold of a norm-constrained LMS (NLMS)     filter, where at each iteration given Omega = norm(w) the     coefficient update will be scaled by sqrt(K/Omega) if Omega &gt; K.</li></ul></div><p><b>Outputs</b></p><div><ul><li><tt>y</tt> - Column vector of the final beamformer output audio signal.</li><li><tt>wSave</tt> - Matrix of all tap weights generated by the adaptive     filters.  These are useful for debugging and for recreating the     same filtering effects with different inputs, and the last set     can be used as input to a subsequent period if time windowing.</li></ul></div><p><b>References</b></p><div><ul><li>Hoshuyama, Osamu, and Akihiko Sugiyama. "Robust Adaptive Beamforming."  Microphone Arrays : Signal Processing Techniques and Applications. Ed. Michael Brandstein and Darren Ward. New York: Springer, 2001.</li></ul></div><p>Written by Phil Townsend (<a href="mailto:jptown0@engr.uky.edu">jptown0@engr.uky.edu</a>) June 10, 2008</p><!--/introduction--><h2>Contents</h2><div><ul><li><a href="#1">Function Declaration</a></li><li><a href="#3">Argument Error Checking</a></li><li><a href="#4">Adaptive Filtering</a></li></ul></div><h2>Function Declaration<a name="1"></a></h2><pre class="codeinput"><span class="keyword">function</span> [y, wSave] = mclms(z, b, mu, order, beta, zInit, wInit, <span class="keyword">...</span>
+    wForce, mcAdapt, K)
+</pre><h2>Argument Error Checking<a name="3"></a></h2><pre class="codeinput">error(nargchk(10, 10, nargin));
+<span class="keyword">if</span> ~isreal(z) || length(size(z)) ~= 2 || ~all(all(isfinite(z)))
+    error(<span class="string">'z must be a real matrix'</span>);
+<span class="keyword">elseif</span> ~isvector(b) || ~isreal(b) || ~all(isfinite(b))
+    error(<span class="string">'b must be a real vector'</span>);
+<span class="keyword">elseif</span> isempty(mu) || ~isscalar(mu) || ~isreal(mu) || ~isfinite(mu)
+    error(<span class="string">'mu must be a real scalar'</span>);
+<span class="keyword">elseif</span> isempty(order) || ~isscalar(order) || ~isreal(order) || <span class="keyword">...</span>
+        ~isfinite(order) || order &lt; 0 || <span class="keyword">...</span>
+	abs(mod(order,floor(order))) &gt; 0
+    error(<span class="string">'order must be a positive integer'</span>);
+<span class="keyword">elseif</span> isempty(beta) || ~isscalar(beta) || ~isreal(beta) || <span class="keyword">...</span>
+        ~isfinite(beta) || beta &lt; 0 || beta &gt; 1
+    error(<span class="string">'beta must be a real scalar in [0,1]'</span>);
+<span class="keyword">elseif</span> length(size(zInit)) ~= 2 || ~isreal(zInit) || <span class="keyword">...</span>
+        ~all(all(isfinite(zInit)))
+    error(<span class="string">'zInit must be a real matrix'</span>);
+<span class="keyword">elseif</span> ~isempty(wInit) &amp;&amp; <span class="keyword">...</span>
+	(length(size(wInit)) ~= 2 || ~isreal(wInit) || <span class="keyword">...</span>
+        ~all(all(isfinite(wInit))))
+    error(<span class="string">'wInit must be a real matrix'</span>);
+<span class="keyword">elseif</span> ~isempty(wForce) &amp;&amp; <span class="keyword">...</span>
+	(~isreal(wForce) || length(size(wForce)) ~= 3 || <span class="keyword">...</span>
+	 size(wForce,1) ~= order || <span class="keyword">...</span>
+	 size(wForce,2) ~= size(z,2) || <span class="keyword">...</span>
+	 ~all(all(all(isfinite(wForce)))))
+    error(<span class="string">'wForce must be a real cubic matrix'</span>);
+<span class="keyword">elseif</span> ~isempty(mcAdapt) &amp;&amp; <span class="keyword">...</span>
+	(~isreal(mcAdapt) || ~all(all(isfinite(mcAdapt))))
+    error(<span class="string">'mcAdapt must be a real matrix'</span>);
+<span class="keyword">elseif</span> ~isempty(K) &amp;&amp; <span class="keyword">...</span>
+	(~isscalar(K) || ~isreal(K) ||  ~isfinite(K) || K &lt; 0)
+    error(<span class="string">'K must be a real positive scalar'</span>);
+<span class="keyword">end</span>
+</pre><pre class="codeoutput error">Error using mclms (line 69)
+Not enough input arguments.
+</pre><h2>Adaptive Filtering<a name="4"></a></h2><p>Apply the LMS algorithm with possibly some tap controls.  The LMS adaptation algorithm applied to each audio track is</p><p><img src="mclms_eq05488757417802764367.png" alt="$${\bf w}_i(n+1) = \beta {\bf w}_i(n) +&#xA;\mu\frac{y(n)}{{\bf z}_i^T(n){\bf z}_i(n)}{\bf z}_i(n),&#xA;\quad \beta \in [0, 1] , \quad \mu \in [0, 2], \quad i \in [1, M] $$"></p><p>where the algorithm is "leaky" if beta &lt; 1.  Note that, as in all GSC algorithms, the output signal y is used directly as the error signal in these filters, thus minimizing the overall output power of the beamformer.  In addition, if K is specified, we have a norm-constrained adaptive filter (NCAF), which restrains the total power that can pass through the filter if the tap norm exceeds K, as described by</p><p><img src="mclms_eq04961398675345700032.png" alt="$$\Omega_i = {\bf w}_i(n+1){\bf w}_i^T(n+1)$$"></p><p><img src="mclms_eq16519505544809278263.png" alt="$${\bf w}_i(n+1) = \sqrt{\frac{K}{\Omega_i}}{\bf w}_i(n+1),&#xA;\quad \Omega_i &gt; K$$"></p><p>The output of the beamformer is calculated as the Fixed-Beamformer Output minus the sum of the filter outputs.</p><p><img src="mclms_eq12981128971944823609.png" alt="$$ y(n) = b(n) \ ^\_ \ \sum_{i=1}^{M} {\bf w}_i'(n){\bf z}_i(n) $$"></p><p>Each column of w holds the taps for an adaptive filter on a column of the input microphone tracks x.  wSave saves a 3-D matrix of all values of w.  Use wInit for initial value of w if supplied; zeros otherwise.</p><pre class="codeinput"><span class="keyword">if</span> isempty(wInit), w = zeros(order, size(z,2)); <span class="keyword">else</span> w = wInit; <span class="keyword">end</span>
+<span class="keyword">if</span> isempty(zInit),  zInit = zeros(order, size(z,2));  <span class="keyword">end</span>
+wSave = zeros(order, size(z,2), length(b));
+y = zeros(size(b));
+
+<span class="comment">% This highly-vectorized code implements many LMS filters of order</span>
+<span class="comment">% ord--one for each track of BM</span>
+<span class="keyword">for</span> n = 1:length(b)
+    <span class="comment">% Select the data window for this iteration</span>
+    <span class="keyword">if</span> n &lt;= order  <span class="comment">% feed in supplied past values ahead of z</span>
+        zWin = [zInit(end-order+n+1:end,:); z(1:n,:)];
+    <span class="keyword">else</span>  <span class="comment">% need only data from given z</span>
+        zWin = z(n-order+1:n,:);
+    <span class="keyword">end</span>
+
+    <span class="comment">% Compute output for this iteration and ensure stability</span>
+    y(n) = b(n) - sum(diag(w'*zWin));
+    <span class="keyword">if</span> ~isfinite(y(n)), error(<span class="string">'Output has blown up'</span>), <span class="keyword">end</span>
+
+    <span class="comment">% If wForce supplied, use those supplied weights.  Otherwise,</span>
+    <span class="comment">% figure out taps for the next iteration</span>
+    <span class="keyword">if</span> ~isempty(wForce), w = wForce(:,:,n); <span class="keyword">continue</span>, <span class="keyword">end</span>
+
+    <span class="comment">% Tap update. If mcAdapt specified, adapt only requested columns</span>
+    <span class="keyword">if</span> isempty(mcAdapt)
+        normvec = sum(zWin.^2);  <span class="comment">% Norm of each column</span>
+        normvec(normvec&lt;1e-10) = 1e-10;  <span class="comment">% Ensure norm is nonzero</span>
+        normmat = ones(order,1)*normvec;  <span class="comment">% Expand to matrix</span>
+        w = beta*w + mu*y(n)*zWin ./ normmat;  <span class="comment">% Tap update</span>
+    <span class="keyword">else</span>
+        amcInds = find(mcAdapt(n,:));
+        normvec = sum(zWin(:, amcInds).^2);  <span class="comment">% Norm of each column</span>
+        normvec(normvec&lt;1e-10) = 1e-10;  <span class="comment">% Ensure norm is nonzero</span>
+        normmat = ones(order,1)*normvec;
+        w(:,amcInds) = beta*w(:,amcInds) + <span class="keyword">...</span>
+            mu*y(n)*zWin(:,amcInds) ./ normmat;  <span class="comment">% Tap update</span>
+    <span class="keyword">end</span>
+
+    <span class="comment">% Tap weight constraints</span>
+    <span class="comment">% NCAF (Norm-Constrained Adaptive Filter)</span>
+    <span class="keyword">if</span> ~isempty(K)
+        <span class="comment">% Finding norm without Matlab's function lets us avoid for</span>
+        Omega = sum(w.^2);  <span class="comment">% Find norm of all columns</span>
+        OmegaMat = ones(order,1) * Omega;  <span class="comment">% Expand to a norm matrix</span>
+        inds = OmegaMat &gt; K;  <span class="comment">% save comparison so it doesnt repeat</span>
+        <span class="keyword">if</span> ~isempty(mcAdapt) <span class="comment">% apply AMC SNR threshold if specified</span>
+            amcIndMat = ones(order,1) * mcAdapt(n,:);
+            inds = OmegaMat &gt; K &amp; amcIndMat;
+        <span class="keyword">end</span>
+        w(inds) = w(inds) .* sqrt(K./OmegaMat(inds));
+    <span class="keyword">end</span>
+
+    <span class="comment">% Save the taps used on this iteration</span>
+    wSave(:,:,n) = w;
+
+<span class="keyword">end</span>  <span class="comment">% function mclms</span>
+</pre><p class="footer"><br><a href="http://www.mathworks.com/products/matlab/">Published with MATLAB&reg; R2015b</a><br></p></div><!--
+##### SOURCE BEGIN #####
+%% Multiple-Input Canceller LMS Filter
+%
+% Apply an LMS filter to each output track of a GSC blocking matrix,
+% summing the output of the filters at each iteration and subtracting
+% from a fixed beamformer signal to generate the overall bemaformer
+% output.  The output signal is rerouted to the adaptive filters as
+% the error signal so that target signal power is suppressed, causing
+% a purer noise signal to be subtracted from the delay and sum
+% beamformer.  In addition, a norm-constaint can be placed on the LMS taps
+% to help guide their adaptation.
+%
+% *Syntax*
+%
+% |[y, wSave] = mclms(z, b, mu, order, beta, zInit, wInit, 
+%      wForce, mcAdapt, K)|
+% 
+% *Required Inputs*
+%
+% * |z| - Matrix of blocking matrix outputs, each column a track
+% * |b| - Column vector of Delay and Sum beamformer output
+% * |mu| - Step size of adaptation.  This algorithm uses the
+%     normalized LMS variant so mu must be in [0,2] to ensure
+%     stability.
+% * |order| - Order of the adaptive filter.
+% * |beta| - Leakage coefficient (forgetting factor).  Beta must be in
+%     [0,1], where 0 implies zero memory and 1 implies no forgetting
+%     (neither extreme is likely to be very helpful).
+%
+% *Optional Inputs*
+%
+% * |zInit| - Vector of values to be initially fed into the adaptive
+%     filter inputs ahead of bm.  For a windowed application this can
+%     allow for seamless transition between windows without data at
+%     window boundaries losing time in the filter.  If initial values
+%     aren't needed, simply set to zeros.
+% * |wInit| - Matrix of tap weights for the first iteration.  This is
+%     good for ensuring that runs over audio windows flow smoothly, To
+%     avoid forcing this initial value, supply []
+% * |wForce| - Matrix of tap weights to force the filters into using,
+%     rather than adapting.  This is useful for recreating a previous
+%     run with the same filter behavior.  To avoid forcing weights,
+%     supply []
+% * |K| - Specifies the threshold of a norm-constrained LMS (NLMS)
+%     filter, where at each iteration given Omega = norm(w) the
+%     coefficient update will be scaled by sqrt(K/Omega) if Omega > K.
+%
+% *Outputs*
+%
+% * |y| - Column vector of the final beamformer output audio signal.
+% * |wSave| - Matrix of all tap weights generated by the adaptive
+%     filters.  These are useful for debugging and for recreating the
+%     same filtering effects with different inputs, and the last set
+%     can be used as input to a subsequent period if time windowing.
+%
+% *References*
+%
+% * Hoshuyama, Osamu, and Akihiko Sugiyama. "Robust Adaptive
+% Beamforming."  Microphone Arrays : Signal Processing Techniques and
+% Applications. Ed. Michael Brandstein and Darren Ward. New York:
+% Springer, 2001.
+%
+% Written by Phil Townsend (jptown0@engr.uky.edu) June 10, 2008
+
+%% Function Declaration
+function [y, wSave] = mclms(z, b, mu, order, beta, zInit, wInit, ...
+    wForce, mcAdapt, K)   
+
+%% Argument Error Checking
+error(nargchk(10, 10, nargin));
+if ~isreal(z) || length(size(z)) ~= 2 || ~all(all(isfinite(z)))
+    error('z must be a real matrix');
+elseif ~isvector(b) || ~isreal(b) || ~all(isfinite(b))
+    error('b must be a real vector');
+elseif isempty(mu) || ~isscalar(mu) || ~isreal(mu) || ~isfinite(mu)
+    error('mu must be a real scalar');
+elseif isempty(order) || ~isscalar(order) || ~isreal(order) || ...
+        ~isfinite(order) || order < 0 || ...
+	abs(mod(order,floor(order))) > 0
+    error('order must be a positive integer'); 
+elseif isempty(beta) || ~isscalar(beta) || ~isreal(beta) || ...
+        ~isfinite(beta) || beta < 0 || beta > 1
+    error('beta must be a real scalar in [0,1]');
+elseif length(size(zInit)) ~= 2 || ~isreal(zInit) || ...
+        ~all(all(isfinite(zInit)))
+    error('zInit must be a real matrix');
+elseif ~isempty(wInit) && ...
+	(length(size(wInit)) ~= 2 || ~isreal(wInit) || ...
+        ~all(all(isfinite(wInit))))
+    error('wInit must be a real matrix');
+elseif ~isempty(wForce) && ...
+	(~isreal(wForce) || length(size(wForce)) ~= 3 || ...
+	 size(wForce,1) ~= order || ...
+	 size(wForce,2) ~= size(z,2) || ...
+	 ~all(all(all(isfinite(wForce)))))
+    error('wForce must be a real cubic matrix');
+elseif ~isempty(mcAdapt) && ...
+	(~isreal(mcAdapt) || ~all(all(isfinite(mcAdapt))))
+    error('mcAdapt must be a real matrix');
+elseif ~isempty(K) && ...
+	(~isscalar(K) || ~isreal(K) ||  ~isfinite(K) || K < 0)
+    error('K must be a real positive scalar');
+end
+
+%% Adaptive Filtering
+% Apply the LMS algorithm with possibly some tap controls.  The LMS
+% adaptation algorithm applied to each audio track is
+%
+% $${\bf w}_i(n+1) = \beta {\bf w}_i(n) +
+% \mu\frac{y(n)}{{\bf z}_i^T(n){\bf z}_i(n)}{\bf z}_i(n),
+% \quad \beta \in [0, 1] , \quad \mu \in [0, 2], \quad i \in [1, M] $$
+%
+% where the algorithm is "leaky" if beta < 1.  Note that, as in all
+% GSC algorithms, the output signal y is used directly as the error
+% signal in these filters, thus minimizing the overall output power of
+% the beamformer.  In addition, if K is specified, we have a
+% norm-constrained adaptive filter (NCAF), which restrains the total
+% power that can pass through the filter if the tap norm exceeds K, as
+% described by
+%
+% $$\Omega_i = {\bf w}_i(n+1){\bf w}_i^T(n+1)$$
+%
+% $${\bf w}_i(n+1) = \sqrt{\frac{K}{\Omega_i}}{\bf w}_i(n+1), 
+% \quad \Omega_i > K$$
+%
+% The output of the beamformer is calculated as the Fixed-Beamformer
+% Output minus the sum of the filter outputs.
+%
+% $$ y(n) = b(n) \ ^\_ \ \sum_{i=1}^{M} {\bf w}_i'(n){\bf z}_i(n) $$
+%
+% Each column of w holds the taps for an adaptive filter on a column
+% of the input microphone tracks x.  wSave saves a 3-D matrix of all
+% values of w.  Use wInit for initial value of w if supplied; zeros
+% otherwise.
+if isempty(wInit), w = zeros(order, size(z,2)); else w = wInit; end
+if isempty(zInit),  zInit = zeros(order, size(z,2));  end
+wSave = zeros(order, size(z,2), length(b));
+y = zeros(size(b));
+
+% This highly-vectorized code implements many LMS filters of order
+% ordREPLACE_WITH_DASH_DASHone for each track of BM
+for n = 1:length(b)
+    % Select the data window for this iteration
+    if n <= order  % feed in supplied past values ahead of z
+        zWin = [zInit(end-order+n+1:end,:); z(1:n,:)];
+    else  % need only data from given z
+        zWin = z(n-order+1:n,:);
+    end
+
+    % Compute output for this iteration and ensure stability
+    y(n) = b(n) - sum(diag(w'*zWin));
+    if ~isfinite(y(n)), error('Output has blown up'), end
+
+    % If wForce supplied, use those supplied weights.  Otherwise,
+    % figure out taps for the next iteration
+    if ~isempty(wForce), w = wForce(:,:,n); continue, end
+
+    % Tap update. If mcAdapt specified, adapt only requested columns
+    if isempty(mcAdapt)
+        normvec = sum(zWin.^2);  % Norm of each column
+        normvec(normvec<1e-10) = 1e-10;  % Ensure norm is nonzero
+        normmat = ones(order,1)*normvec;  % Expand to matrix
+        w = beta*w + mu*y(n)*zWin ./ normmat;  % Tap update
+    else
+        amcInds = find(mcAdapt(n,:));
+        normvec = sum(zWin(:, amcInds).^2);  % Norm of each column
+        normvec(normvec<1e-10) = 1e-10;  % Ensure norm is nonzero
+        normmat = ones(order,1)*normvec; 
+        w(:,amcInds) = beta*w(:,amcInds) + ...
+            mu*y(n)*zWin(:,amcInds) ./ normmat;  % Tap update
+    end
+
+    % Tap weight constraints
+    % NCAF (Norm-Constrained Adaptive Filter)
+    if ~isempty(K)  
+        % Finding norm without Matlab's function lets us avoid for
+        Omega = sum(w.^2);  % Find norm of all columns
+        OmegaMat = ones(order,1) * Omega;  % Expand to a norm matrix
+        inds = OmegaMat > K;  % save comparison so it doesnt repeat
+        if ~isempty(mcAdapt) % apply AMC SNR threshold if specified
+            amcIndMat = ones(order,1) * mcAdapt(n,:);
+            inds = OmegaMat > K & amcIndMat;
+        end
+        w(inds) = w(inds) .* sqrt(K./OmegaMat(inds));
+    end
+
+    % Save the taps used on this iteration
+    wSave(:,:,n) = w;
+
+end  % function mclms
+##### SOURCE END #####
+--></body></html>

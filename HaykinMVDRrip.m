@@ -1,7 +1,7 @@
 clear all; 
 close all; 
 
-p = 5; % no of sensors
+p = 8; % no of sensors
 Ninit = p; 
 Nsnaps = 300; % No of iterations
 Ndata = Ninit + Nsnaps;  % Total data

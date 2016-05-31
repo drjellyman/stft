@@ -208,10 +208,10 @@ close(hwt)
 % wavwrite(yRobustGsc/(sqrt(2)*max(yRobustGsc)), fs, 'yRobustGsc.wav');
 
 
-audiowrite('yClose.wav',yclose/(sqrt(2)*max(yclose)),fs);
-audiowrite('yDsb.wav',yDsb/(sqrt(2)*max(yDsb)),fs);
-audiowrite('yGjbf.wav',yGjbf/(sqrt(2)*max(yGjbf)),fs);
-audiowrite('yRobustGsc.wav',yRobustGsc/(sqrt(2)*max(yRobustGsc)),fs);
+% audiowrite('yClose.wav',yclose/(sqrt(2)*max(yclose)),fs);
+% audiowrite('yDsb.wav',yDsb/(sqrt(2)*max(yDsb)),fs);
+% audiowrite('yGjbf.wav',yGjbf/(sqrt(2)*max(yGjbf)),fs);
+% audiowrite('yRobustGsc.wav',yRobustGsc/(sqrt(2)*max(yRobustGsc)),fs);
 
 
 
