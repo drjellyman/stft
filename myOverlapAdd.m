@@ -8,7 +8,7 @@ function [x ] = myOverlapAdd( X )
     w = sqrt(0.5*(1-cos((2*pi*[0:K-1]')/(K-1))));
         
     % Take the ifft of each time block
-    xBlocks = ifft(X);
+    xBlocks = ifft(X);%,'symmetric');
     
     % Overlap add the blocks
     x = zeros((K-1)*(L+1)/2+1,1);
