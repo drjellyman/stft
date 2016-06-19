@@ -63,7 +63,7 @@ S2half = S2(2:(K+1)/2-1,:);
 
 %% Place sensors
 NSources = length(s(1,:));
-M = 50; % M = number of sensors
+M = 30; % M = number of sensors
 dz = 0.01; % ds = distance between sensors (m)
 zPos = ones(3,M);
 zPos(1,:) = zPos(1,:).*([0:M-1]*dz+1); % Set sensor position
@@ -149,7 +149,7 @@ end
 W = F; % Initialize weight vector
 
 % Iterate
-mu = 1e-4 ; % mu = step size
+mu = 1e-5 ; % mu = step size
 for l=1:L
     Ztmp = squeeze(Z(:,l,:));
     Y(:,l) = sum(conj(W).*Ztmp,2); 
