@@ -5,9 +5,7 @@
 % = 16 kHz. Window length is 25 ms with a Hann window and 50% overlap.
 % Interference is a randomly placed, zero meaqn gaussian point source with
 % power equal to -5, 0, 5 dB when compared to the target signal. 
-% 
-% Based on Matt's paper.
-close all; 
+close all; clear;
 
 % Import target audio
 [s1,fs1] = audioread('273177__xserra__la-vaca-cega-eva.wav'); 
@@ -51,27 +49,25 @@ S2half = S2(2:(K+1)/2-1,:);
 %% Place sensors
 M = 20; % M = number of sensors
 Nsrcs = 2; % Nsrcs = number of sources
-space = [30, 30, 30]'; % Dimensions of the space
+spSize = 30;
+space = [spSize, spSize, spSize]'; % Dimensions of the space
 spcDim = length(space);
 Mloc = (rand(M,spcDim)*diag(space)).'; % Mloc = matrix containing 3d sensor locations
 sloc = ((rand(Nsrcs,spcDim)*diag(space))).';%+[0,0,2;0,0,2]).'; % sloc = matrix condaining 3d source locations
+
+% Calculate distances
+ssd = zeros(Nsrcs,M);
+for ns=1:Nsrcs
+    for m=1:M
+        ssd(ns,m) = norm(Mloc(:,m)-sloc(:,ns));
+    end
+end
 
 % Display layout
 figure; plot3(Mloc(1,:), Mloc(2,:), Mloc(3,:), '*'); grid on; hold on; 
 plot3(sloc(1,1), sloc(2,1), sloc(3,1), 'o'); 
 plot3(sloc(1,2), sloc(2,2), sloc(3,2), '^'); legend('Sensors','Target','Interferer')
 set(gca, 'fontsize', 14);
-
-% Calculate distances
-ssd = zeros(spcDim,M,Nsrcs);
-for ns = 1:Nsrcs
-    for m = 1:M
-        ssd(ns,m) = norm(Mloc(:,m)-sloc(:,ns));
-    end    
-end
-
-% Find closest sensors
-% [distmin,distmini] = min(dist);
 
 %% Create ATFs
 Khalf = (K-1)/2-1;
@@ -96,109 +92,66 @@ for l = 1:L
     end
 end
 
-% Check sensors closest to each source
-% Xt = [zeros(1,L);X(:,:,distmini(1));zeros(2,L);conj(flipud(X(:,:,distmini(1))))];
-% xt = myOverlapAdd(Xt);
-% Xi = [zeros(1,L);X(:,:,distmini(2));zeros(2,L);conj(flipud(X(:,:,distmini(2))))];
-% xi = myOverlapAdd(Xi);
-
 %% Delay and sum
-W = Atnogain;
-[yds,ydsSNRdb] = myBfOp(X,Xt,Xi,W);
-ydsSNRdb
+% W = Atnogain;
+% [yds,ydsSNRdb] = myBfOp(X,Xt,Xi,W);
+% ydsSNRdb
 
 %% MVDR optimum weights
-W = ones(Khalf,M);
-for k=1:Khalf
-    R = zeros(M,M); % R is the spatial covariance of the inputs
-    for l=1:L
-        Xtmp = squeeze(X(k,l,:));
-        R = R + Xtmp*Xtmp'; % Sum the covariance over l
-    end
-    R = R + 1e-9*eye(M); % Diagonal loading
-    Ak = At(k,:).';
-    W(k,:) = (R\Ak)/(Ak'*(R\Ak)); % Calculate optimum weights vector 
-end
-Wopt = W;
-[yopt,yoptSNRdb] = myBfOp(X,Xt,Xi,W);
-yoptSNRdb
-
-%% Adaptive Frost using actual covariance
-R = zeros(M,M);
-for l=1:L
-    R = R + squeeze(X(:,l,:)).'*squeeze(conj(X(:,l,:)));
-end
+% dl = 1e-9; % dl = diagonal loading factor - ensures that the covariance is invertible
+% Wopt = myMvdrOpt(At,X,dl);
+% [yopt,yoptSNRdb] = myBfOp(X,Xt,Xi,Wopt);
+% yoptSNRdb
 
 %% Adaptive Frost MVDR
-P = zeros(Khalf,M,M); 
-F = zeros(Khalf,M);
-for k = 1:Khalf
-    Ak = At(k,:).';
-    P(k,:,:) = eye(M) - (Ak*Ak')/(norm(Ak)^2);
-    F(k,:) = Ak/(norm(Ak)^2);
-end
-% W = F; % Initialize weight vector
-% % Iterate
 % mu = 200; % mu = step size 
-% Iter = 10;
-% Y = zeros(Khalf,L);
-Wmse = zeros(L,1);
-% for l=1:L
-%     Xtmp = squeeze(X(:,l,:));
-%     Y(:,l) = sum(conj(W).*Xtmp,2);     
-%     for k = 1:Khalf
-%         Xtmp = squeeze(X(k,l,:));
-%         Rtmp = Xtmp*Xtmp';
-%         Ptmp = squeeze(P(k,:,:));
-%         Ftmp = F(k,:).';
-%         for iter = 1:Iter
-%             Wtmp = W(k,:).'; 
-%             W(k,:) = Ptmp*(Wtmp-mu*Rtmp*Wtmp)+Ftmp; % Update weights
-%         end
-%     end
-%     Wmse(l) = myMse(Wopt,W);
-% end
+% Iter = 10; % Iter = number of iterations per window
+% [Y,W,Wmse] = myFrostAdapt(At,X,mu,Iter,Wopt);
 % 
 % % Create two sided Y and take istft
 % Y = [zeros(1,L);Y;zeros(2,L);conj(flipud(Y))];
 % yFrO = myOverlapAdd(Y); % yFrO = y Frost Online
-% figure; plot(yFrO);
-% 
+% figure; plot(yFrO);% 
 % figure; semilogy(Wmse);
 % figure; plot(Wmse);
 
 %% Adaptive Frost using actual covariance
-% R = zeros(Khalf,M,M);
-% for l=1:L
-%     for k=1:Khalf
-%         R(k,:,:) = squeeze(R(k,:,:)) + (1/L)*squeeze(X(k,l,:))*squeeze((X(k,l,:)))';
-%     end
-% end
-% 
 % mu = 1000; % mu = step size 
-% Iter = 10;
-% Y = zeros(Khalf,L);
-% W = ones(Khalf,M);
-% for l=1:L
-%     Xtmp = squeeze(X(:,l,:));
-%     Y(:,l) = sum(conj(W).*Xtmp,2);     
-%     for k = 1:Khalf
-%         Xtmp = squeeze(X(k,l,:));
-%         Ptmp = squeeze(P(k,:,:));
-%         Ftmp = F(k,:).';
-%         Rtmp = squeeze(R(k,:,:));
-%         for iter = 1:Iter
-%             Wtmp = W(k,:).'; 
-%             W(k,:) = Ptmp*(Wtmp-mu*Rtmp*Wtmp)+Ftmp; % Update weights
-%         end
-%     end
-%     Wmse(l) = myMse(Wopt,W);
-% end
+% Iter = 10; % Iter = number of iterations per window
+% [Y,W,Wmse] = myFrostAdaptTrueCov(At,X,mu,Iter,Wopt);
 % 
 % % Create two sided Y and take istft
 % Y = [zeros(1,L);Y;zeros(2,L);conj(flipud(Y))];
 % yFrO = myOverlapAdd(Y); % yFrO = y Frost Online
 % figure; plot(yFrO);
-% 
 % figure; semilogy(Wmse);
 % figure; plot(Wmse);
+
+%% Sparse distributed BiADMM MVDR
+% Calculate the adjacency matrix
+% Find sensor to sensor distances
+sensd = zeros(M,M);
+for m=1:M
+    for mm=m:M
+        sensd(m,mm) = norm(Mloc(:,m)-Mloc(:,mm));
+    end
+end
+sensd = sensd + triu(sensd,1).';
+
+sensdtmp = sensd + diag(ones(1,M)*2*spSize); % 2* spSize is guaranteed to be larger than any distance between sensors
+Nnghbrs = 3; % Nnghbrs sets the number of neighbors per node
+N = zeros(Nnghbrs,M); % N = matrix containing indices of the three closest neighbours to each node
+for aaa = 1:3
+    [sensdmin, sensdmini] = min(sensdtmp);
+    N(aaa,:) = sensdmini;
+    for bbb = 1:20
+        sensdtmp(sensdmini(bbb),bbb) = 2*spSize;
+        sensdtmp(bbb,sensdmini(bbb)) = 2*spSize;
+    end
+end
+% if max(min(sensdtmp)) > dmax
+%     display('Warning: not all nodes have neighbors.');
+% end
+% 
+% C = (sensdtmp<dmax)
+% sum(C,1)
