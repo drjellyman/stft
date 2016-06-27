@@ -13,7 +13,7 @@ N = length(s1);
 % Time domain
 sHs1 = s1'*s1; 
 sHs2 = s2'*s2;
-energy_s1 = sHs1;
+energy_s1 = sHs1; % okie dokie, need to change something for git? having issues
 energy_s2 = sHs2;
 power_s1 = (1/N)*(sHs1);
 power_s2 = (1/N)*(sHs2);
