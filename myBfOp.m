@@ -31,6 +31,6 @@ function [ y,SNRdB,yt,yi] = myBfOp( X,Xt,Xi,W )
     yi = myOverlapAdd(Yi);
     
     % Calculate SNRdB
-    SNRdB = 10*log10(((yt'*yt)/length(yt)) / ((yi'*yi)/length(yi)));
+    SNRdB = 10*log10((yt'*yt) / (yi'*yi));
 end
 

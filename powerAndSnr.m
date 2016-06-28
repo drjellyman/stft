@@ -58,21 +58,20 @@ power_s2stft = (1/N)*(sHs2stft);
 norm(s1stft-s1)
 SNRdBistft = 10*log10(power_s1stft/power_s2stft);
 
-% sum the energy/power in freq domain for 2sided stftwqqqqqqqqqaQ
-
-energy_S1stftHalf = 0;
-energy_S2stftHalf = 0;
-power_S1stftHalf = 0;
-power_S2stftHalf = 0;
+% sum the energy/power in freq domain for 2sided stft
+energy_S1stft = 0;
+energy_S2stft = 0;
+power_S1stft = 0;
+power_S2stft = 0;
 for l=1:L
-    tmp1 = S1stftHalf(:,l)'*S1stftHalf(:,l);
-    tmp2 = S2stftHalf(:,l)'*S2stftHalf(:,l);
-    energy_S1stftHalf = energy_S1stftHalf + (2/K)*(tmp1);
-    energy_S2stftHalf = energy_S2stftHalf + (2/K)*(tmp2);
-    power_S1stftHalf = power_S1stftHalf + (1/(L-1))*(2/K)^2*(tmp1);
-    power_S2stftHalf = power_S2stftHalf + (1/(L-1))*(2/K)^2*(tmp2);
+    tmp1 = S1stft(:,l)'*S1stft(:,l);
+    tmp2 = S2stft(:,l)'*S2stft(:,l);
+    energy_S1stft = energy_S1stft + (1/K)*(tmp1);
+    energy_S2stft = energy_S2stft + (1/K)*(tmp2);
+    power_S1stft = power_S1stft + (2/L)*(1/K)^2*(tmp1);
+    power_S2stft = power_S2stft + (2/L)*(1/K)^2*(tmp2);
 end
-SNRdBstftHalf = 10*log10(power_S1stftHalf/power_S2stftHalf);
+SNRdBstft = 10*log10(power_S1stft/power_S2stft);
 
 % istft with half spectrum
 S1stftHalfRecon = [zeros(1,L);S1stftHalf;zeros(2,L);conj(flipud(S1stftHalf))];
@@ -128,7 +127,7 @@ SNRdBistftHalfInclDCFS2 = 10*log10(power_s1stftHalfInclDCFS2Recon/power_s2stftHa
 EandP = [energy_s1,power_s1,energy_s2,power_s2;
         energy_S1fft,power_S1fft,energy_S2fft,power_S2fft;
         energy_s1stft,power_s1stft,energy_s2stft,power_s2stft;
-        energy_S1stftHalf,power_S1stftHalf,energy_S2stftHalf,power_S2stftHalf;               
+        energy_S1stft,power_S1stft,energy_S2stft,power_S2stft;               
         energy_s1stftHalfRecon,power_s1stftHalfRecon,energy_s2stftHalfRecon,power_s2stftHalfRecon;
         energy_S1stftHalfInclDCFS2, power_S1stftHalfInclDCFS2, energy_S2stftHalfInclDCFS2, power_S2stftHalfInclDCFS2;
         energy_s1stftHalfInclDCFS2Recon, power_s1stftHalfInclDCFS2Recon, energy_s2stftHalfInclDCFS2Recon, power_s2stftHalfInclDCFS2Recon]
@@ -140,7 +139,7 @@ error = [EandP(1,:)-EandP(3,:);
 SNR = [SNRdBt;
        SNRdBfft;
        SNRdBistft;
-       SNRdBstftHalf;
+       SNRdBstft;
        SNRdBistftHalf;
        SNRdBstftHalfInclDCFS2;
        SNRdBistftHalfInclDCFS2]

@@ -119,9 +119,9 @@ for l = 1:L
 end
 
 %% Delay and sum
-W = At; % Atnogain
-[yds,ydsSNRdb] = myBfOp(X,Xt,Xi,W);
-ydsSNRdb
+% W = At; % Atnogain
+% [yds,ydsSNRdb] = myBfOp(X,Xt,Xi,W);
+% ydsSNRdb
 
 % dsSNRdb = mySnr();
 
@@ -146,15 +146,15 @@ ydsSNRdb
 % 10*log10(Gsum)
 
 %% MVDR optimum weights
-dl = 1e-9; % dl = diagonal loading factor - ensures that the covariance is invertible
-Wopt = myMvdrOpt(At,X,dl);
-[yopt,yFrSNRdb] = myBfOp(X,Xt,Xi,Wopt);
-yFrSNRdb
+% dl = 1e-9; % dl = diagonal loading factor - ensures that the covariance is invertible
+% Wopt = myMvdrOpt(At,X,dl);
+% [yopt,yFrSNRdb] = myBfOp(X,Xt,Xi,Wopt);
+% yFrSNRdb
 
-output = [M, ydsSNRdb, yFrSNRdb];
-fid = fopen('SnrVsSensors.txt', 'at');
-fprintf(fid, '%f %f %f\n', output);
-fclose(fid);
+% output = [M, ydsSNRdb, yFrSNRdb];
+% fid = fopen('SnrVsSensors.txt', 'at');
+% fprintf(fid, '%f %f %f\n', output);
+% fclose(fid);
 
 % White noise gain
 % G = zeros(Khalf,1);
@@ -168,7 +168,7 @@ fclose(fid);
 % 10*log10(Gsum)
 
 
-% Vorobyov principles of min...
+% Vorobyov "principles of min..."
 % SINR = E{|w^H s|^2} / E{|w^H (i+n)|^2} = sigma_s^2 |w^H a(theta_s)|^2 /
 % w^H R_i+n w where sigma_s^2 = E{|s(k)|^2} and R_i+n=E{(i(k)+n(k))(i(k)+n(k)^H)}
 % sigma_S_sq = zeros(Khalf,1);
@@ -230,48 +230,119 @@ fclose(fid);
 % figure; semilogy(Wmse);
 % figure; plot(Wmse);
 
-%% Sparse distributed BiADMM MVDR
+%% Sparse distributed BiADMM MVDR Matt
 % Calculate the adjacency matrix
 % Find sensor to sensor distances
-% sensd = zeros(M,M);
-% for m=1:M
-%     for mm=m:M
-%         sensd(m,mm) = norm(Mloc(:,m)-Mloc(:,mm));
-%     end
-% end
-% sensd = sensd + triu(sensd,1).'; % Convert from upper triangular to symmetric
-% 
-% sensdtmp = sensd + diag(ones(1,M)*2*spSize); % 2* spSize is guaranteed to be larger than any distance between sensors
-% Nnghbrs = 2; % Nnghbrs sets the minimum number of neighbors per node
-% NNghbrsCheck = 10;
-% N = -ones(NNghbrsCheck,M); % N = matrix containing indices of the neighbours to each node
-% while min(min(N(1:Nnghbrs,:))) == -1
-%     sensdmin = find(sensdtmp(:)==min(sensdtmp(:)));
-%     [sensdminRow, sensdminCol] = ind2sub(size(sensdtmp),sensdmin(1)); % Find the row and column of the smallest distance left, note that there will be two values as the matrix is symmetric
-%     if N(1,sensdminRow) == -1 || N(2,sensdminRow) == -1 || ... % You only get to add a neighbor if you have less than two already
-%             N(1,sensdminCol) == -1 || N(2,sensdminCol) == -1 
-%         for aa = 1:NNghbrsCheck
-%             if N(aa,sensdminRow) == -1
-%                 N(aa,sensdminRow) = sensdminCol; % Add the neighbor to the first empty slot
-%                 break
+sensd = zeros(M,M); % sensd = sensor to sensor distance
+for m=1:M
+    for mm=m:M
+        sensd(m,mm) = norm(Mloc(:,m)-Mloc(:,mm));
+    end
+end
+sensd = sensd + triu(sensd,1).'; % Convert from upper triangular to symmetric
+
+sensdtmp = sensd + diag(ones(1,M)*2*spSize); % 2* spSize is guaranteed to be larger than any distance between sensors
+Nnghbrs = 5; % Nnghbrs sets the minimum number of neighbors per node
+NNghbrsCheck = 20;
+N = -ones(NNghbrsCheck,M); % N = matrix containing indices of the neighbours to each node
+C = zeros(M,M);
+while min(min(N(1:Nnghbrs,:))) == -1
+    sensdmin = find(sensdtmp(:)==min(sensdtmp(:)));
+    [sensdminRow, sensdminCol] = ind2sub(size(sensdtmp),sensdmin(1)); % Find the row and column of the smallest distance left, note that there will be two values as the matrix is symmetric
+    % You only get to add a neighbor if you have less than Nnghbrs already
+    if N(1,sensdminRow) == -1 || N(2,sensdminRow) == -1 || N(3,sensdminRow) == -1 || N(4,sensdminRow) == -1 || N(5,sensdminRow) == -1 ||... 
+            N(1,sensdminCol) == -1 || N(2,sensdminCol) == -1 || N(3,sensdminCol) == -1 || N(4,sensdminCol) == -1 || N(4,sensdminCol) == -1
+        for aa = 1:NNghbrsCheck
+            if N(aa,sensdminRow) == -1
+                N(aa,sensdminRow) = sensdminCol; % Add the neighbor to the first empty slot
+                break
+            end
+        end
+        for aa = 1:NNghbrsCheck
+            if N(aa,sensdminCol) == -1
+                N(aa,sensdminCol) = sensdminRow; % Add the neighbor to the first empty slot
+                break
+            end
+        end
+        C(sensdminRow,sensdminCol) = 1;
+        C(sensdminCol,sensdminRow) = 1;
+    end
+    
+    % Set both copies of the distance just used higher than the possible
+    % distance, so they cannot be the minimum distance again.
+    sensdtmp(sensdminRow,sensdminCol) = 2*spSize; 
+    sensdtmp(sensdminCol,sensdminRow) = 2*spSize;
+end
+% Truncate unused rows of N
+maxNoNghbrs = min(find(sum(N,2)==-M))-1;
+N = N(1:maxNoNghbrs,:);
+% Ccross2 = 1./(C'*C); % This results in a lot of inf, maybe that is what
+% the 'protected' in the paper is referring to? 
+
+% Step through nodes for primal/dual update
+W = ones(Khalf,maxNoNghbrs);
+
+for l=2:2
+    for m=1:1
+        aa = 1; 
+%         XN = [];
+        Ntmp = [N(1:min(find(N(:,m)==-1))-1,m);m];
+        NoNghbrs = length(Ntmp);
+%         XN = zeros(Khalf,NoNghbrs); 
+        Anm = zeros(2,10,NoNghbrs-1);
+        for aa = 1:8 % step through current node's neighbors
+            n = Ntmp(aa);
+            n=n
+            Anmtmp = zeros(length(N(1:min(find(N(:,n)==-1))-1,n)),1);
+            for bb = 1:NoNghbrs
+                bb = bb
+                Anmtmp = Anmtmp - (Ntmp(bb) == N(1:min(find(N(:,n)==-1))-1,n));
+            end
+            Anmtmp = [Anmtmp.',-1;-Anmtmp.',1];
+            Anm(:,:,aa) = [Anmtmp,zeros(2,length(Anm)-length(Anmtmp))]
+        end
+
+        
+        
+%         for aa = 1:NoNghbrs
+%             Nbrtmp = N(1:min(find(N(:,Ntmp(aa))==-1))-1,Ntmp(aa));
+%             Nbrtmplen = length(Nbrtmp);
+%             for bb = 1: Nbrtmplen
+%                 Ntmp(bb)==N(1:Nbrtmp,Ntmp(aa))
 %             end
 %         end
-%         for aa = 1:NNghbrsCheck
-%             if N(aa,sensdminCol) == -1
-%             N(aa,sensdminCol) = sensdminRow; % Add the neighbor to the first empty slot
-%                 break
+        
+        
+        
+        
+%         for aa = 1:NoNghbrs
+%             XN(:,aa) = X(:,l,Ntmp(aa));% Observations in the neighborhood
+%             Am = zeros(2,NoNghbrs);
+%             for bb = 1:NoNghbrs
+%                 tmp = (Ntmp(bb)==N(1:NoNghbrs,Ntmp(bb))
+%                 Am = Am + [tmp.';-tmp.'];
 %             end
+%             Amn(aa,:,:) = Am;
 %         end
-%     end
-%     
-%     % Set both copies of the distance just used higher than the possible
-%     % distance, so they cannot be the minimum distance again.
-%     sensdtmp(sensdminRow,sensdminCol) = 2*spSize; 
-%     sensdtmp(sensdminCol,sensdminRow) = 2*spSize;
-% end
-% % Truncate unused rows of N
-% maxNoNghbrs = min(find(sum(N,2)==-M))-1;
-% N = N(1:maxNoNghbrs,:);
+
+%         Rm = zeros(Khalf,NoNghbrs,NoNghbrs);
+%         for k=1:Khalf
+%             Rm(k,:,:) = XN(k,:).'*conj(XN(k,:));            
+%         end
+        % Setup Amn and Anm for node m:
+            % Step through neighbors n = N(:,m)
+                % 
+        
+                
+        % Calculate x(l+1)
+        % Calculate lambda(l+1)
+        % Calculate virtual node primal update
+        % Calculate virtual node dual update
+        % Calculate zk
+        % Transmit to collection node 
+    end
+end
+
 
 
 
