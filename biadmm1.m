@@ -282,66 +282,168 @@ N = N(1:maxNoNghbrs,:);
 % Step through nodes for primal/dual update
 W = ones(Khalf,maxNoNghbrs);
 
-for l=2:2
-    for m=1:1
-        aa = 1; 
-%         XN = [];
-        Ntmp = [N(1:min(find(N(:,m)==-1))-1,m);m];
-        NoNghbrs = length(Ntmp);
-%         XN = zeros(Khalf,NoNghbrs); 
-        Anm = zeros(2,10,NoNghbrs-1);
-        for aa = 1:8 % step through current node's neighbors
-            n = Ntmp(aa);
-            n=n
-            Anmtmp = zeros(length(N(1:min(find(N(:,n)==-1))-1,n)),1);
-            for bb = 1:NoNghbrs
-                bb = bb
-                Anmtmp = Anmtmp - (Ntmp(bb) == N(1:min(find(N(:,n)==-1))-1,n));
-            end
-            Anmtmp = [Anmtmp.',-1;-Anmtmp.',1];
-            Anm(:,:,aa) = [Anmtmp,zeros(2,length(Anm)-length(Anmtmp))]
+% m=1;n=57;
+% [M,N] = myChop(N(:,m),m,N(:,n),n);
+% [Amn,Anm] = myAconsistency(M,N);
+
+Lambda = zeros(M,Khalf,maxNoNghbrs); % This is going to be wrong size
+W = zeros(M,Khalf,maxNoNghbrs);
+for l=2
+    for m=1
+        % Build consistency matrices Amn and Anm
+        NM = myChop(N(:,m),m); % NM = list of neighbors of the current node m, note that it includes itself
+        NMl = length(NM);
+        Amn = 9*ones(2,NMl,NMl-1); % 9 indicates an unused column, necessary as the number of neighbors varies with node
+        Anm = 9*ones(2,maxNoNghbrs,NMl-1);
+        for n=1:NMl-1
+            NN = myChop(N(:,NM(n)),NM(n));
+            [AmnTmp,AnmTmp] = myAconsistency(NM,NN);
+            Amn(:,:,n) = AmnTmp;
+            Anm(:,1:length(AnmTmp),n) = AnmTmp;
         end
-
         
+        % Find neighborhood covariance estimate
+            % get observations from neighbors
+            XN = zeros(Khalf,NMl);
+            for n=1:NMl
+                XN(:,n) = X(:,l,NM(n));
+            end
+            % Calculate local covariance
+            Rkm = zeros(Khalf,NMl,NMl);
+            for k=1:Khalf
+                Rkm(k,:,:) = XN(k,:).'*conj(XN(k,:)); % Need to add C+2, the protected elementwise inverse of the square of the adjacency matrix
+            end
         
-%         for aa = 1:NoNghbrs
-%             Nbrtmp = N(1:min(find(N(:,Ntmp(aa))==-1))-1,Ntmp(aa));
-%             Nbrtmplen = length(Nbrtmp);
-%             for bb = 1: Nbrtmplen
-%                 Ntmp(bb)==N(1:Nbrtmp,Ntmp(aa))
-%             end
-%         end
+        % Create dk
+%         dk = zeros(Khalf,NMl); % This is pretty wierd, its a big matrix of mostly zeros
+%         dk(:,end) = At(:,l,m);
         
-        
-        
-        
-%         for aa = 1:NoNghbrs
-%             XN(:,aa) = X(:,l,Ntmp(aa));% Observations in the neighborhood
-%             Am = zeros(2,NoNghbrs);
-%             for bb = 1:NoNghbrs
-%                 tmp = (Ntmp(bb)==N(1:NoNghbrs,Ntmp(bb))
-%                 Am = Am + [tmp.';-tmp.'];
-%             end
-%             Amn(aa,:,:) = Am;
-%         end
-
-%         Rm = zeros(Khalf,NoNghbrs,NoNghbrs);
-%         for k=1:Khalf
-%             Rm(k,:,:) = XN(k,:).'*conj(XN(k,:));            
-%         end
-        % Setup Amn and Anm for node m:
-            % Step through neighbors n = N(:,m)
-                % 
-        
+        % Calculate local weight matrix update
+%         Wlplus1 = zeros(Khalf,NMl);
+        for k=1:Khalf
+            AmnSum = zeros(NMl,NMl);
+            ALAWSum = zeros(NMl,1);
+            RkmTmp = squeeze(Rkm(k,:,:)); % 9 x 9
+            AARISum = zeros(NMl,NMl);
+            ALAWARdSum = zeros(NMl,1);
+            dk = [zeros(NMl-1,1);At(k,m)]
+            for n=1:NMl-1 % Sum over neighbors
+                AmnTmp = squeeze(Amn(:,:,n)); % 2 x 9
+                AmnSum = AmnSum + AmnTmp.'*AmnTmp;
+                neighbor = NM(n);
+%                 NN = myChop(N(:,NM(n)),NM(n));
+                LambdaTmp = squeeze(Lambda(NM(n),k,find(m==myChop(N(:,NM(n)),NM(n)))));
+                AnmTmp = Anm(:,1:min(find(Anm(1,:,n)==9))-1,NMl-1);
+                WTmp = squeeze(W(NM(n),k,1:min(find(Anm(1,:,n)==9))-1)); % 7 x 1
+                ALAWSum = ALAWSum + AmnTmp.'*(LambdaTmp-AnmTmp*WTmp);
                 
-        % Calculate x(l+1)
-        % Calculate lambda(l+1)
-        % Calculate virtual node primal update
-        % Calculate virtual node dual update
-        % Calculate zk
-        % Transmit to collection node 
+                % for Lambda
+                AARISum = AARISum + AmnTmp.'*AmnTmp/RkmTmp+eye(NMl);
+                ALAWARdSum = ALAWARdSum + AmnTmp.'*(LambdaTmp-AnmTmp*WTmp-AnmTmp*RkmTmp*dk);
+                zk = AHH BALLS! THIS NEEDS TO LOOP AROUND n TWICE OR SOMETHING
+                % Calculate the next adapted Lambda
+                Lambda() = LambdaTmp-AnmTmp*WTmp-AnmTmp/RkmTmp*(dk+zk);
+            end
+            % Calculate the next adapted weights
+            
+            
+            W(m,k,:) = (AmnSum + RkmTmp)\(ALAWSum + dk);        
+            
+            % Calculate the next adapted Lambda
+            Lambda() = Lambda
+        end
+        
+        % Calculate local dual weight update
+        
+       
+        
+        
+        % Calculate local dual update
+        
+        % Update primal and dual for virtual node
+        
     end
 end
+
+% for l=2:2
+%     for m=1:1
+%         
+%         
+% %         aa = 1; 
+% % %         XN = [];
+% %         Ntmp = [N(1:min(find(N(:,m)==-1))-1,m);m];
+% %         NoNghbrs = length(Ntmp);
+% % %         XN = zeros(Khalf,NoNghbrs); 
+% %         Anm = 9*ones(2,10,NoNghbrs-1);
+% %         for aa = 1:8 % step through current node's neighbors
+% %             n = Ntmp(aa);
+% %             n=n
+% %             Anmtmp = zeros(length(N(1:min(find(N(:,n)==-1))-1,n)),1);
+% %             for bb = 1:NoNghbrs
+% %                 bb = bb
+% %                 Anmtmp = Anmtmp - (Ntmp(bb) == N(1:min(find(N(:,n)==-1))-1,n));
+% %             end
+% %             Anmtmp = [Anmtmp.',-1;-Anmtmp.',1];
+% %             Anm(:,:,aa) = [Anmtmp,9*ones(2,length(Anm)-length(Anmtmp))]
+% %         end
+% % 
+% %         % Now Anm
+% %         aa = 1;         
+% %         Ntmp = [N(1:min(find(N(:,m)==-1))-1,m);m];
+% %         NoNghbrs = length(Ntmp);
+% %         Anm = 9*ones(2,10,NoNghbrs-1);
+% %         for aa = 1:8 % step through current node's neighbors
+% %             n = Ntmp(aa);
+% %             n=n
+% %             Anmtmp = zeros(length(N(1:min(find(N(:,n)==-1))-1,n)),1);
+% %             for bb = 1:NoNghbrs
+% %                 bb = bb
+% %                 Anmtmp = Anmtmp - (Ntmp(bb) == N(1:min(find(N(:,n)==-1))-1,n));
+% %             end
+% %             Anmtmp = [Anmtmp.',-1;-Anmtmp.',1];
+% %             Anm(:,:,aa) = [Anmtmp,9*ones(2,length(Anm)-length(Anmtmp))]
+% %         end
+%        
+%         
+%         
+% %         for aa = 1:NoNghbrs
+% %             Nbrtmp = N(1:min(find(N(:,Ntmp(aa))==-1))-1,Ntmp(aa));
+% %             Nbrtmplen = length(Nbrtmp);
+% %             for bb = 1: Nbrtmplen
+% %                 Ntmp(bb)==N(1:Nbrtmp,Ntmp(aa))
+% %             end
+% %         end
+%         
+%         
+%         
+%         
+% %         for aa = 1:NoNghbrs
+% %             XN(:,aa) = X(:,l,Ntmp(aa));% Observations in the neighborhood
+% %             Am = zeros(2,NoNghbrs);
+% %             for bb = 1:NoNghbrs
+% %                 tmp = (Ntmp(bb)==N(1:NoNghbrs,Ntmp(bb))
+% %                 Am = Am + [tmp.';-tmp.'];
+% %             end
+% %             Amn(aa,:,:) = Am;
+% %         end
+% 
+% %         Rm = zeros(Khalf,NoNghbrs,NoNghbrs);
+% %         for k=1:Khalf
+% %             Rm(k,:,:) = XN(k,:).'*conj(XN(k,:));            
+% %         end
+%         % Setup Amn and Anm for node m:
+%             % Step through neighbors n = N(:,m)
+%                 % 
+%         
+%                 
+%         % Calculate x(l+1)
+%         % Calculate lambda(l+1)
+%         % Calculate virtual node primal update
+%         % Calculate virtual node dual update
+%         % Calculate zk
+%         % Transmit to collection node 
+%     end
+% end
 
 
 
