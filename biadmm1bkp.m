@@ -266,28 +266,22 @@ while min(min(N(1:Nnghbrs,:))) == -1
         end
         C(sensdminRow,sensdminCol) = 1;
         C(sensdminCol,sensdminRow) = 1;
-    end
-    
+    end    
     % Set both copies of the distance just used higher than the possible
     % distance, so they cannot be the minimum distance again.
     sensdtmp(sensdminRow,sensdminCol) = 2*spSize; 
     sensdtmp(sensdminCol,sensdminRow) = 2*spSize;
 end
+
 % Truncate unused rows of N
 maxNoNghbrs = min(find(sum(N,2)==-M))-1;
 N = N(1:maxNoNghbrs,:);
-% Ccross2 = 1./(C'*C); % This results in a lot of inf, maybe that is what
-% the 'protected' in the paper is referring to? 
 
 % Step through nodes for primal/dual update
-W = ones(Khalf,maxNoNghbrs);
-
-% m=1;n=57;
-% [M,N] = myChop(N(:,m),m,N(:,n),n);
-% [Amn,Anm] = myAconsistency(M,N);
-
-Lambda = zeros(M,Khalf,maxNoNghbrs); % This is going to be wrong size
-W = zeros(M,Khalf,maxNoNghbrs);
+Lambda = zeros(M,Khalf,maxNoNghbrs+1,2); % m x n x 2 x k ???
+LambdaV = zeros(M,Khalf,1,2); % m x n x 2 x k ??? % V = virtual
+W = zeros(M,Khalf,maxNoNghbrs+1);
+WV = zeros(M,Khalf); % V = virtual
 for l=2
     for m=1
         % Build consistency matrices Amn and Anm
@@ -303,65 +297,68 @@ for l=2
         end
         
         % Find neighborhood covariance estimate
-            % get observations from neighbors
-            XN = zeros(Khalf,NMl);
-            for n=1:NMl
-                XN(:,n) = X(:,l,NM(n));
-            end
-            % Calculate local covariance
-            Rkm = zeros(Khalf,NMl,NMl);
-            for k=1:Khalf
-                Rkm(k,:,:) = XN(k,:).'*conj(XN(k,:)); % Need to add C+2, the protected elementwise inverse of the square of the adjacency matrix
-            end
-        
-        % Create dk
-%         dk = zeros(Khalf,NMl); % This is pretty wierd, its a big matrix of mostly zeros
-%         dk(:,end) = At(:,l,m);
-        
-        % Calculate local weight matrix update
-%         Wlplus1 = zeros(Khalf,NMl);
-        for k=1:Khalf
-            AmnSum = zeros(NMl,NMl);
-            ALAWSum = zeros(NMl,1);
-            RkmTmp = squeeze(Rkm(k,:,:)); % 9 x 9
-            AARISum = zeros(NMl,NMl);
-            ALAWARdSum = zeros(NMl,1);
-            dk = [zeros(NMl-1,1);At(k,m)]
-            for n=1:NMl-1 % Sum over neighbors
-                AmnTmp = squeeze(Amn(:,:,n)); % 2 x 9
-                AmnSum = AmnSum + AmnTmp.'*AmnTmp;
-                neighbor = NM(n);
-%                 NN = myChop(N(:,NM(n)),NM(n));
-                LambdaTmp = squeeze(Lambda(NM(n),k,find(m==myChop(N(:,NM(n)),NM(n)))));
-                AnmTmp = Anm(:,1:min(find(Anm(1,:,n)==9))-1,NMl-1);
-                WTmp = squeeze(W(NM(n),k,1:min(find(Anm(1,:,n)==9))-1)); % 7 x 1
-                ALAWSum = ALAWSum + AmnTmp.'*(LambdaTmp-AnmTmp*WTmp);
-                
-                % for Lambda
-                AARISum = AARISum + AmnTmp.'*AmnTmp/RkmTmp+eye(NMl);
-                ALAWARdSum = ALAWARdSum + AmnTmp.'*(LambdaTmp-AnmTmp*WTmp-AnmTmp*RkmTmp*dk);
-                zk = 
-                % Calculate the next adapted Lambda
-                Lambda() = LambdaTmp-AnmTmp*WTmp-AnmTmp/RkmTmp*(dk+zk);
-            end
-            % Calculate the next adapted weights
-            
-            
-            W(m,k,:) = (AmnSum + RkmTmp)\(ALAWSum + dk);        
-            
-            % Calculate the next adapted Lambda
-            Lambda() = Lambda
+        % get observations from neighbors
+        XN = zeros(Khalf,NMl);
+        for n=1:NMl
+            XN(:,n) = X(:,l,NM(n));
         end
-        
-        % Calculate local dual weight update
-        
-       
-        
-        
-        % Calculate local dual update
-        
-        % Update primal and dual for virtual node
-        
+        % Calculate local covariance
+        Rkm = zeros(Khalf,NMl,NMl);
+        for k=1:Khalf
+            Rkm(k,:,:) = XN(k,:).'*conj(XN(k,:)); % Need to add C+2, the protected elementwise inverse of the square of the adjacency matrix
+        end
+        if m<M+1 % Real nodes
+            % Calculate local weight matrix update
+            Wsave = W(m,:,:);
+            for k=1:Khalf
+                AmnSum = zeros(NMl,NMl);
+                ALAWSum = zeros(NMl,1);
+                RkmTmp = squeeze(Rkm(k,:,:)); % 9 x 9
+                AARISum = zeros(NMl,NMl);
+                ALAWARdSum = zeros(NMl,1);
+                dk = [zeros(NMl-1,1);At(k,m)];
+                for n=1:NMl-1 % Sum over neighbors
+                    AmnTmp = squeeze(Amn(:,:,n)); % 2 x 9
+                    AmnSum = AmnSum + AmnTmp.'*AmnTmp;
+                    neighbor = NM(n);
+    %                 NN = myChop(N(:,NM(n)),NM(n));
+                    LambdaTmp = squeeze(Lambda(NM(n),k,find(m==myChop(N(:,NM(n)),NM(n))),:));
+                    AnmTmp = Anm(:,1:min(find(Anm(1,:,n)==9))-1,NMl-1);
+                    WTmp = squeeze(W(NM(n),k,1:min(find(Anm(1,:,n)==9))-1)); % 7 x 1
+                    ALAWSum = ALAWSum + AmnTmp.'*(LambdaTmp-AnmTmp*WTmp);
+
+                    % Find zk
+                    AARISum = AARISum + AmnTmp.'*AmnTmp/RkmTmp+eye(NMl);
+                    ALAWARdSum = ALAWARdSum + AmnTmp.'*(LambdaTmp-AnmTmp*WTmp-AmnTmp*RkmTmp*dk);
+                end
+                zk = AARISum\ALAWARdSum;
+%                 LambdaSave = squeeze(Lambda(m,k,:,:));
+                for n=1:NMl-1
+                    % Calculate the next adapted Lambda
+                    LambdaTmp = squeeze(Lambda(NM(n),k,find(m==myChop(N(:,NM(n)),NM(n))),:));
+                    AnmTmp = Anm(:,1:find(Anm(1,:,n)==9,1)-1,NMl-1);
+                    WTmp = squeeze(W(NM(n),k,1:find(Anm(1,:,n)==9,1)-1)); % 7 x 1
+                    AmnTmp = squeeze(Amn(:,:,n)); % 2 x 9
+                    Lambda(m,k,n,:) = LambdaTmp-AnmTmp*WTmp-AmnTmp/RkmTmp*(dk+zk);
+                end
+                % Add one Lambda for the virtual node
+                AmnTmp = [zeros(1,NMl-1),1;zeros(1,NMl-1),-1]; % 2 x 9
+                Lambda(m,k,NMl,:) = squeeze(LambdaV(m,k,1,:))-[-1;1]*WV(m,k)-AmnTmp/RkmTmp*(dk+zk);
+                
+               
+                % Calculate the next adapted weights            
+                W(m,k,:) = [(AmnSum + RkmTmp)\(ALAWSum + dk);zeros(maxNoNghbrs-NMl+1,1)];       
+            end  
+        elseif m>M % Virtual nodes (Note that virtual nodes only have one neighbor)
+            for k=1:Khalf
+                WTmp = squeeze(Wsave(m-M,k,1:find(Anm(1,:,n)==9,1)-1));
+                AnmTmp = [-1;1];
+                AmnTmp = [1;-1];
+%                 LambdaTmp = 
+%                 
+%                 bk = 2*W().'*Anm.'Amn-Amn.'Lambdanm;
+            end
+        end
     end
 end
 
