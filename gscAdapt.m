@@ -28,7 +28,7 @@ s1save = s1;
 
 % Shorten the signals
 K = 2^9+1; % Window length in samples. +1 makes the window length odd and symmetric. stft() will either truncate the window by 1, or overlap the 1st and last elements (which are both zero). This means we could consider the window length to be K-1 also depending on whether we would prefer to consider a symmetric or periodic window.
-len_s = min(length(s1), length(s2));
+len_s = 20*fs;%min(length(s1), length(s2));
 len_s = len_s - mod(len_s,K-1);
 s1 = s1(1:len_s);
 s2 = s2(1:len_s);
@@ -142,43 +142,44 @@ axis tight;ylim([-0.06, 0.06]);
 
 %% A2) Adaptive Frost
 % 
-for k = 1:K
-    Atmp = A(k,:).';
-    P(k,:,:) = eye(M) - (Atmp*Atmp')/(norm(Atmp)^2);
-    F(k,:) = Atmp/(norm(Atmp)^2);
-end
-W = F; % Initialize weight vector
-
-% Iterate
-mu = 0.0002; % mu = step size
-lambda = 0;%1e-12; % lambda = diagonal loading % 
-% muMaybe = zeros(K,L);
-for l=1:L
-    Ztmp = squeeze(Z(:,l,:));
-    Y(:,l) = sum(W.*Ztmp,2); 
-    for k = 1:K
-        Ptmp = squeeze(P(k,:,:));
-        Ztmp = squeeze(Z(k,l,:));
-%         lambda = 2*Ztmp'*Ztmp; % optimal lambda is 2 * noise power?
-%         doesn't work
-        Ftmp = F(k,:).';
-        Wtmp = W(k,:).';
-        Rtmp = Ztmp*Ztmp'+lambda*eye(M);
-%         PowScale = 0.01*Ztmp'*Ztmp;
-%         W(k,:) = Ptmp*(Wtmp-mu*Ztmp*Y(k,l)')+Ftmp; % Update weights
-        W(k,:) = Ptmp*(Wtmp-mu*Rtmp*Wtmp)+Ftmp; % Update weights
-
-    end
-%     Wdiff(l) = norm(Wopt-W);
-end
-y = myOverlapAdd(Y);
-figure; plot(y);
+% for k = 1:K
+%     Atmp = A(k,:).';
+%     P(k,:,:) = eye(M) - (Atmp*Atmp')/(norm(Atmp)^2);
+%     F(k,:) = Atmp/(norm(Atmp)^2);
+% end
+% W = F; % Initialize weight vector
+% 
+% % Iterate
+% mu = 0.0002; % mu = step size
+% lambda = 0;%1e-12; % lambda = diagonal loading % 
+% % muMaybe = zeros(K,L);
+% for l=1:L
+%     Ztmp = squeeze(Z(:,l,:));
+%     Y(:,l) = sum(W.*Ztmp,2); 
+%     for k = 1:K
+%         Ptmp = squeeze(P(k,:,:));
+%         Ztmp = squeeze(Z(k,l,:));
+% %         lambda = 2*Ztmp'*Ztmp; % optimal lambda is 2 * noise power?
+% %         doesn't work
+%         Ftmp = F(k,:).';
+%         Wtmp = W(k,:).';
+%         Rtmp = Ztmp*Ztmp'+lambda*eye(M);
+% %         PowScale = 0.01*Ztmp'*Ztmp;
+% %         W(k,:) = Ptmp*(Wtmp-mu*Ztmp*Y(k,l)')+Ftmp; % Update weights
+%         W(k,:) = Ptmp*(Wtmp-mu*Rtmp*Wtmp)+Ftmp; % Update weights
+% 
+%     end
+% %     Wdiff(l) = norm(Wopt-W);
+% end
+% y = myOverlapAdd(Y);
+% figure; plot(y);
 % figure; plot(Wdiff); grid on; xlabel('No. of iterations'); ylabel('Norm(Wopt-W)');
 % set(gca,'fontsize',14); axis tight;
 % figure; hold on;
 % for k = 1:K
 %     plot(muMaybe(k,:));    
 % end
+
 %% A2.b) Adaptive Frost using actual covariance
 % mu = 0.01; % mu = step size
 % R = zeros(K,M,M);
@@ -188,6 +189,7 @@ figure; plot(y);
 %         R(k,:,:) = squeeze(R(k,:,:)) + Ztmp*Ztmp'; % Sum the covariance over l
 %     end    
 % end
+
 % % Iteration over time
 % Wdiff = zeros(l,1);
 % for l=1:L
@@ -287,42 +289,42 @@ figure; plot(y);
 % end
 % y = myOverlapAdd(Y);
 
-%% Check final weight vector
-st = linspace(-pi/2,pi/2,L); % Set up DOA space
-dt = dz*sin(st)/c; % Set up time delay space
-figure; hold on;
-plot([sAng(1), sAng(1)],[-200, 50],'--', [sAng(2), sAng(2)],[-200, 50],'--');
-Psave = zeros(126,1);
-for k=2:127
-    delays = exp(j*2*pi*fdom(k)*[1:M]'*dt);
-    P = 20*log10(abs(W(k,:)*delays).^2);
-%     P = 20*log10(abs(G(k,:)*delays(1:7,:)).^2);
-    plot(st,P);
-    Psave(k)=P(1745);
-end
-
-grid on; xlabel('Look direction (radians)');ylabel('Power (dB)');
-legend('Target','Interferer'); axis tight; set(gca,'fontsize',14);
-
-figure; plot(Psave,'*'); legend('Power at interferer direction by frequency bin');
-
-%% Use final weight vector to process mixed z's
-Zb = zeros(K,L,M);
-
-for l = 1:L
-    for m = 1:M
-        Zb(:,l,m) = A(:,m).*S1(:,l)+A2(:,m).*S2(:,l) ; % S1save
-    end
-end
-z1b = myOverlapAdd(Z(:,:,1));
-
-
-for l=1:L
-    Zbtmp = squeeze(Zb(:,l,:));
-    Yb(:,l) = sum(W.*Zbtmp,2); 
-end
-yb = myOverlapAdd(Yb);
-figure; plot(yb);
+% %% Check final weight vector
+% st = linspace(-pi/2,pi/2,L); % Set up DOA space
+% dt = dz*sin(st)/c; % Set up time delay space
+% figure; hold on;
+% plot([sAng(1), sAng(1)],[-200, 50],'--', [sAng(2), sAng(2)],[-200, 50],'--');
+% Psave = zeros(126,1);
+% for k=2:127
+%     delays = exp(j*2*pi*fdom(k)*[1:M]'*dt);
+%     P = 20*log10(abs(W(k,:)*delays).^2);
+% %     P = 20*log10(abs(G(k,:)*delays(1:7,:)).^2);
+%     plot(st,P);
+%     Psave(k)=P(1745);
+% end
+% 
+% grid on; xlabel('Look direction (radians)');ylabel('Power (dB)');
+% legend('Target','Interferer'); axis tight; set(gca,'fontsize',14);
+% 
+% figure; plot(Psave,'*'); legend('Power at interferer direction by frequency bin');
+% 
+% %% Use final weight vector to process mixed z's
+% Zb = zeros(K,L,M);
+% 
+% for l = 1:L
+%     for m = 1:M
+%         Zb(:,l,m) = A(:,m).*S1(:,l)+A2(:,m).*S2(:,l) ; % S1save
+%     end
+% end
+% z1b = myOverlapAdd(Z(:,:,1));
+% 
+% 
+% for l=1:L
+%     Zbtmp = squeeze(Zb(:,l,:));
+%     Yb(:,l) = sum(W.*Zbtmp,2); 
+% end
+% yb = myOverlapAdd(Yb);
+% figure; plot(yb);
 
 %% Create flac files to go with write up
 % audiowrite('Target.flac',s1,fs);

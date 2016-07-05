@@ -11,8 +11,9 @@ classdef myNode
         N           % Neighbor ids
         Nlen        % Number of neighbors including this node and it's virtual node
         Amn         % Consistency matrix from this node (m) to node n
-        Anm         % Consistency matrix from node n to node m
+%         Anm         % Consistency matrix from node n to node m
         X           % Observation data in frequency domain for the neighborhood of this node
+        Y           % MVDR output of node m
     end
     
     methods
