@@ -145,6 +145,18 @@ for l = 1:L
         X(:,l,m) = Xt(:,l,m)+Xi(:,l,m);
     end
 end
+whichNode = 24;
+Xtcheck = [zeros(1,L);Xt(:,:,whichNode);zeros(2,L);conj(flipud(Xt(:,:,whichNode)))];
+mySpectrogram(Xtcheck);
+xtcheck = myOverlapAdd(Xtcheck);
+figure; plot(xtcheck);
+
+Xcheck = [zeros(1,L);X(:,:,whichNode);zeros(2,L);conj(flipud(X(:,:,whichNode)))];
+mySpectrogram(Xcheck);
+xcheck = myOverlapAdd(Xcheck);
+figure; plot(xcheck);
+
+return
 
 %% Create true covariance matrix
 % Rtrue = cell(Khalf,1);

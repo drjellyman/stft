@@ -117,6 +117,13 @@ for l = 1:L
         X(:,l,m) = Xt(:,l,m)+Xi(:,l,m);
     end
 end
+whichNode = 43;
+Xtcheck = [zeros(1,L);Xt(:,:,whichNode);zeros(2,L);conj(flipud(Xt(:,:,whichNode)))];
+mySpectrogram(Xtcheck);
+xtcheck = myOverlapAdd(Xtcheck);
+figure; plot(xtcheck);
+
+return 
 
 %% Delay and sum
 % W = At; % Atnogain

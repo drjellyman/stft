@@ -35,9 +35,9 @@ s2 = s2(1:len_s);
 s1save = s1save(1:len_s);
 s = [s1,s2];    
 
-figure; subplot(3,1,1); plot(s1);axis tight; ylim([-0.06, 0.06]);set(gca,'fontsize',14); legend('Target'); subplot(3,1,2); plot(s2); 
-legend('Interferer'); grid on; set(gca,'fontsize',14); axis tight;
-ylim([-0.06, 0.06]);
+% figure; subplot(3,1,1); plot(s1);axis tight; ylim([-0.06, 0.06]);set(gca,'fontsize',14); legend('Target'); subplot(3,1,2); plot(s2); 
+% legend('Interferer'); grid on; set(gca,'fontsize',14); axis tight;
+% ylim([-0.06, 0.06]);
 
 %% STFT 
 % pad the source signals so the 1st half window doesn't distort the data
@@ -50,7 +50,7 @@ s1savePadded = [zeros((K-1)/2,1);s1save;zeros((K-1)/2,1)];
 [S2,L2] = stft(s2Padded,K);
 [S1save,L3] = stft(s1savePadded,K);
 
-figure; mySpectrogram(S1);
+% figure; mySpectrogram(S1);
 
 %% Place sensors
 NSources = length(s(1,:));
@@ -58,7 +58,8 @@ M = 32; % M = number of sensors
 dz = 0.005; % ds = distance between sensors (m)
 zPos = ones(3,M);
 zPos(1,:) = zPos(1,:).*([0:M-1]*dz+1); % Set sensor position
-sAng = [pi/3, 0]'; % Set source angle of arrival
+% sAng = [pi*10/21, pi*3/37];%[pi/3, 0]'; % Set source angle of arrival
+sAng = [1.5*rand, 1.5*rand];
 c = 343; % Speed of sound (m/s)
 dt = dz*sin(sAng)/c; % dt = time delay between sensors (s)
 dd = dz*sin(sAng(1));
@@ -86,19 +87,19 @@ grid on; set(gca,'fontsize',14); xlim([1,8]); xlabel('Sensor'); ylabel('Distance
 % figure; plot(fliplr([1:8]*dd),'*:'); grid on; set(gca,'fontsize',14);xlim([1,8]);xlabel('Sensor'); ylabel('Distance (m)');
 
 %% Create atf for both sources (planar)
-fdom = (fs/(K-1)) * [0:(K-1)/2 , -(K-1)/2:-1]';
-for m = 1:M
-        A(:,m) = exp(-j*2*pi*fdom'*m*dt(1)) ;
-        A2(:,m) = exp(-j*2*pi*fdom'*m*dt(2));
-end
+% fdom = (fs/(K-1)) * [0:(K-1)/2 , -(K-1)/2:-1]';
+% for m = 1:M
+%         A(:,m) = exp(-j*2*pi*fdom'*m*dt(1)) ;
+%         A2(:,m) = exp(-j*2*pi*fdom'*m*dt(2));
+% end
 
 %% Create atf for both sources (point)
-% fdom = (fs/(K-1)) * [0:(K-1)/2 , -(K-1)/2:-1]';
-% 
-% for m = 1:M
-%         A(:,m) = exp(-j*2*pi*fdom'*dist(1,m)/c) ;
-%         A2(:,m) = exp(-j*2*pi*fdom'*dist(2,m)/c);
-% end
+fdom = (fs/(K-1)) * [0:(K-1)/2 , -(K-1)/2:-1]';
+
+for m = 1:M
+        A(:,m) = exp(-j*2*pi*fdom'*dist(1,m)/c) ;
+        A2(:,m) = exp(-j*2*pi*fdom'*dist(2,m)/c);
+end
 
 %% Create observations Z
 Z = zeros(K,L,M);
@@ -110,6 +111,8 @@ end
 z1 = myOverlapAdd(Z(:,:,1));
 subplot(3,1,3); plot(z1); set(gca,'fontsize',14); legend('Observation Mic #1');
 axis tight;ylim([-0.06, 0.06]);
+
+return
 
 %% Remove redundant frequency info
 
