@@ -1,0 +1,30 @@
+close all; clear
+
+N = 10;
+fs = 16e3;
+K = 513;
+Khalf = (K-1)/2-1;
+T = 1; % length in time
+S = T*fs-mod(T*fs,(K-1)/2);; % length in samples
+x = randn(S,N);
+[X,L] = stft(x,K);
+X = X(2:(K-1)/2,:,:);
+Rf = zeros(Khalf,L,N,N);
+for l=1:L
+    for k=1:Khalf
+        Rf(k,l,:,:) = squeeze(X(k,l,:))*squeeze(X(k,l,:)).';
+    end
+end
+rcond(squeeze(Rf(23,41,:,:)))
+RfSum = squeeze(sum(Rf,2));
+rcond(squeeze(RfSum(23,:,:)))
+RfklSum = squeeze(sum(RfSum,1));
+rcond(RfklSum)
+
+%% What about time domain spatial covariance? 
+Rt = zeros(T,N,N);
+for s=1:S
+    Rt(s,:,:) = x(s,:).'*x(s,:);
+end
+rcond(sRt(14,:,:)))
+RtSum = squeeze(sum(Rt,1));

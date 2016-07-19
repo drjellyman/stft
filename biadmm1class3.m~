@@ -165,11 +165,6 @@ for m=1:M
     
     % Save look direction d for node m
     node{m}.d = exp(-1i*2*pi*fdomShort.'*ssd(1,m)/c) / (4*pi*ssd(1,m));
-    
-    % Initialize R
-    for k=1:Khalf
-        node{m}.R{k} = 1e-12*eye(node{m}.Nlen-1);
-    end
 end
 
 % Initialize regularization parameter alpha
@@ -185,18 +180,17 @@ for l=1
     l
     % Step through real (and virtual) nodes for primal/dual update
     for m=1:M
-        Nlen = node{m}.Nlen;
+        Nlen = node{m}.Nlen
         Rm = zeros(Khalf,Nlen-1,Nlen-1);
         Xm = zeros(Khalf,Nlen-1);
         Nm = node{m}.N;
         dm = node{m}.d;
-        Wm = node{m}.W;
         
         % iter sets the number of iterative updates per window
         for iter=1
         
             % Get observations
-            node{m}.X = squeeze(X(:,l,node{m}.N(1:end-1))); % -1 to exclude the virtual node
+%             node{m}.X = squeeze(X(:,l,node{m}.N(1:end-1))); % -1 to exclude the virtual node
             Xm = squeeze(X(:,l,node{m}.N(1:end-1))); % -1 to exclude the virtual node
 
 %             % Assign covariance from actual covariance calculated above
@@ -213,17 +207,17 @@ for l=1
 
             % Calculate local covariance
             % Initialize
-%             if l==1
-%                 for k=1:Khalf
-% %                     node{m}.R{k} = 1e-12*eye(Nlen-1);
-%                     Rm(k,:,:) = 1e-12*eye(Nlen-1);
-%                 end
-%             end
+            if l==1
+                for k=1:Khalf
+%                     node{m}.R{k} = 1e-12*eye(Nlen-1);
+                    R(k,:,:) = 1e-12*eye(Nlen-1);
+                end
+            end
             % Calculation only needs to happen when the node changes
             if iter==1
                 for k=1:Khalf
 %                     node{m}.R{k} = (1-gamma)*node{m}.R{k} + gamma*(node{m}.X(k,:).'*node{m}.X(k,:));
-                    Rm(k,:,:) = (1-gamma)*node{m}.R{k} + gamma*(Xm(k,:).'*Xm(k,:));
+                    R(k,:,:) = (1-gamma)*squeeze(R(k,:,:)) + gamma*(Xm(k,:).'*Xm(k,:));
                 end
             end
             
@@ -254,27 +248,27 @@ for l=1
                     ALAWsum = ALAWsum + (AmnTmp.'*(LambdanmTmp-AnmTmp*WnTmp));
 
                     % For Lambda update, zk
-                    AmnRinv = AmnTmp/squeeze(Rm(k,:,:));
+                    AmnRinv = AmnTmp/Rm(k,:,:);
                     AARsum = AARsum + (AmnTmp.'*AmnRinv); 
                     ALAWARdsum = ALAWARdsum + (AmnTmp.'*(LambdanmTmp-AnmTmp*WnTmp-AmnRinv*dTmp));  
                  end
                 
-                WRealNew(k,1:Nlen-1) = (AAsum+squeeze(Rm(k,:,:)))\(ALAWsum+dTmp);
-                zk = (AARsum+eye(Nlen-1))\ALAWARdsum;
+                WRealNew(k,1:node{m}.Nlen-1) = (AAsum+node{m}.R{k})\(ALAWsum+dTmp);
+                zk = (AARsum+eye(node{m}.Nlen-1))\ALAWARdsum;
 
                 % Lambda update requires twice around the neighboring nodes:
                 % once for finding the summations in zk, and once for Lambda
                 % itself.
                 for n=1:node{m}.Nlen-1
-                    LambdanmTmp = node{Nm(n)}.L(k,:,(node{Nm(n)}.N==m)).';
-                    AnmTmp = flipud(node{Nm(n)}.Amn{node{Nm(n)}.N==m});
-                    WnTmp = node{Nm(n)}.W(k,:).';
+                    LambdanmTmp = node{node{m}.N(n)}.L(k,:,(node{node{m}.N(n)}.N==m)).';
+                    AnmTmp = flipud(node{node{m}.N(n)}.Amn{node{node{m}.N(n)}.N==m});
+                    WnTmp = node{node{m}.N(n)}.W(k,:).';
                     AmnTmp = node{m}.Amn{n}(:,1:end-1);                
-                    LambdaNew(k,:,n) = LambdanmTmp-AnmTmp*WnTmp-AmnTmp/squeeze(Rm(k,:,:))*(dTmp+zk);
+                    LambdaNew(k,:,n) = LambdanmTmp-AnmTmp*WnTmp-AmnTmp/node{m}.R{k}*(dTmp+zk);
                 end 
                 
                 % Primal update for virtual node m+M
-                WnTmp = Wm(k,:); % Comes from m because m is n for virtual node m+M
+                WnTmp = node{m}.W(k,:); % Comes from m because m is n for virtual node m+M
                 AnmTmp = flipud(node{m}.Amn{end}); % Its ok to use end because m+M is always last 
                 AmnTmp = node{m+M}.Amn{1};
                 LambdanmTmp = node{m}.L(k,:,end);
@@ -303,9 +297,6 @@ for l=1
             node{m+M}.L = LambdaVirtNew;
         end
     end  
-    for k=1:Khalf
-        node{m}.R{k} = squeeze(Rm(k,:,:));
-    end
     
     % Generate output using updated primal and dual weights
     for m=1:M

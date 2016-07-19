@@ -13,6 +13,7 @@ classdef myNode
         Amn         % Consistency matrix from this node (m) to node n
         X           % Observation data in frequency domain for the neighborhood of this node
         Y           % MVDR output of node m
+       
     end
     
     methods
