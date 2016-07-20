@@ -44,7 +44,6 @@ for ns=1:Nsrcs
     s{ns} = audioread(strcat('/audio/',AudioFileNames{ns})); 
 end
 fs = 16e3;
-s{2} = 0.001*randn(length(s{2}),1);
 
 % Truncate to desired length, ensuring that the length is a multiple of 
 % the window length.
@@ -184,7 +183,7 @@ for m=1:M
 end
 
 % Initialize regularization parameter alpha
-alpha = 1;
+alpha = 0.1;
 
 % Initialize output Y
 Y = zeros(Khalf,L);
@@ -193,10 +192,9 @@ Y = zeros(Khalf,L);
 % Step through windows
 gamma = 0.4; % No reason for 0.4, this is just what seems to work
 for l=1:5
-    
+    l
     % Step through real (and virtual) nodes for primal/dual update
     for m=1:M
-        [l,m]
         Nlen = node{m}.Nlen;
 %         Rm = zeros(Khalf,Nlen-1,Nlen-1);
         Rm = zeros(Khalf,Nlen,Nlen);
@@ -208,7 +206,7 @@ for l=1:5
         
         % iter sets the number of iterative updates per window
         for iter=1
-            
+            iter
             % Get observations
 %             node{m}.X = squeeze(X(:,l,node{m}.N(1:end-1))); % -1 to exclude the virtual node
             node{m}.X = squeeze(X(:,l,[node{m}.N(1:end-1);m])); % DODGINESS ALERT --> Here I have concatenated the real node observations into the virtual node's dimension, as the virtual node has no observations of its own.
