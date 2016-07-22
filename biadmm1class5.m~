@@ -44,6 +44,8 @@ for ns=1:Nsrcs
     s{ns} = audioread(strcat('/audio/',AudioFileNames{ns})); 
 end
 fs = 16e3;
+% s{1} = randn(length(s{2}),1);
+% s{2} = randn(length(s{2}),1);
 
 % Truncate to desired length, ensuring that the length is a multiple of 
 % the window length.
@@ -70,7 +72,7 @@ for m=1:2*M
     node{m} = myNode;
 end
 
-spSize = 1; % spSize = size of the room (m)
+spSize = 10; % spSize = size of the room (m)
 space = [spSize, spSize, spSize]'; % Dimensions of the space
 spcDim = length(space);
 Mloc = (rand(M,spcDim)*diag(space)).'; % Mloc = matrix containing 3d sensor locations
@@ -108,7 +110,7 @@ for m=1:M
         Xfft = Xfft + (A .* S{ns});
     end
     Xfft = [0;Xfft;0;0;conj(flipud(Xfft))];
-    x = ifft(Xfft) + 0.000001*randn(tl,1);
+    x = ifft(Xfft) + 0.0005*randn(tl,1);
     xPadded = [zeros((K-1)/2,1);x(1:end-1);zeros((K-1)/2,1)];
     XTmp = stft(xPadded,K);
     X(:,:,m) = XTmp(2:(K-1)/2,:);
@@ -137,11 +139,9 @@ sensd = sensd + triu(sensd,1).'; % Convert from upper triangular to symmetric
 %% Find neighbors, everyone within 0.5*spSize (Aiming for >5 neighbors each, but depends on the number of nodes as well)
 Nneighbors = zeros(M,1);
 for m=1:M
-    node{m}.N = [find(sensd(:,m)<0.5*spSize) ; m+M];
+    node{m}.N = [find(sensd(:,m)<0.6*spSize) ];
     node{m}.Nlen = length(node{m}.N);
     Nneighbors(m) = node{m}.Nlen;    
-    node{m+M}.N = [m+M;m];
-    node{m+M}.Nlen = 2;
 end
 fprintf('The minimum number of neighbors was %d. \nThe mean number of neighbors was %d. \n\n',min(Nneighbors),mean(Nneighbors));
 
@@ -149,41 +149,27 @@ fprintf('The minimum number of neighbors was %d. \nThe mean number of neighbors 
 fdomShort = (fs/(K-1)) * (1:((K-1)/2)-1);
 for m=1:M
     % Initialize Lambdas and weights
-%     node{m}.L = zeros(Khalf,2,node{m}.Nlen-1); % Note that the virtual node has L = 1x1, so the second element is redundant. I have kept it in for ease of coding
-    node{m}.L = cell(2,1); % I need two different sizes for a real node's lambdas: one for real-real, one for real-virtual
-    node{m}.L{1} = zeros(Khalf,2,node{m}.Nlen-1); % These are for node m's real neighbors including itself
-    node{m}.L{2} = zeros(Khalf,1); % This is for node m's virtual node
-%     node{m+M}.L = zeros(Khalf,1,1); 
-    node{m+M}.L{1} = zeros(Khalf,1,1); % This is for virtual node (m+M)'s 1x1 lambda
+    node{m}.L = zeros(Khalf,2,node{m}.Nlen); % These are for node m's real neighbors including itself
     node{m}.W = ones(Khalf,node{m}.Nlen); % Note that this includes node m itself, node m's real neighbors, and node m's virtual neighbor (m+M)
-    node{m+M}.W = ones(Khalf,1); % There is only one weight stored on a virtual node
     
     % Initialize Amn for all nodes
     Amn = cell(node{m}.Nlen,1); 
-    for n = 1:node{m}.Nlen-1 % -1 because I have to set up the virtual node differently
+    for n = 1:node{m}.Nlen
         Amn{n} = [(node{m}.N==m).';-(node{m}.N==node{m}.N(n)).'];
     end
-%     Amn{n+1} = [zeros(1,node{m}.Nlen);-(node{m}.N==node{m}.N(n+1)).'];
-    Amn{n+1} = (node{m}.N==m).';
     node{m}.Amn = Amn;
-%     node{m+M}.Amn{1} = [1;0]; % This is a special consistency matrix A
-%     specifically for virtual nodes. % Don't need this now as all virtual
-%     nodes have Amn = 1 i.e. (1x1).
-    
+   
     % Save look direction d for node m
     node{m}.d = exp(-1i*2*pi*fdomShort.'*ssd(1,m)/c) / (4*pi*ssd(1,m));
     
-    % Initialize R
-    for k=1:Khalf
-%         node{m}.R{k} = 1e-12*eye(node{m}.Nlen-1); 
-        node{m}.R{k} = 1e-6*eye(node{m}.Nlen); % Note that R now includes a dimension for the virtual node, which seems meaningless at first glance
-
-    end
-    
+%     % Initialize R
+%     for k=1:Khalf
+%         node{m}.R{k} = 1e-6*eye(node{m}.Nlen); % Note that R now includes a dimension for the virtual node, which seems meaningless at first glance
+%     end
 end
 
 % Initialize regularization parameter alpha
-alpha = 0.1;
+alpha = 1;
 
 % Initialize output Y
 Y = zeros(Khalf,L);
@@ -192,13 +178,12 @@ Y = zeros(Khalf,L);
 % Step through windows
 gamma = 0.4; % No reason for 0.4, this is just what seems to work
 for l=1:5
-    l
+    
     % Step through real (and virtual) nodes for primal/dual update
     for m=1:M
+        [l,m]
         Nlen = node{m}.Nlen;
-%         Rm = zeros(Khalf,Nlen-1,Nlen-1);
         Rm = zeros(Khalf,Nlen,Nlen);
-%         Xm = zeros(Khalf,Nlen-1);
         Xm = zeros(Khalf,Nlen);
         Nm = node{m}.N;
         dm = node{m}.d;
@@ -206,12 +191,10 @@ for l=1:5
         
         % iter sets the number of iterative updates per window
         for iter=1
-            iter
+            
             % Get observations
-%             node{m}.X = squeeze(X(:,l,node{m}.N(1:end-1))); % -1 to exclude the virtual node
-            node{m}.X = squeeze(X(:,l,[node{m}.N(1:end-1);m])); % DODGINESS ALERT --> Here I have concatenated the real node observations into the virtual node's dimension, as the virtual node has no observations of its own.
-%             Xm = squeeze(X(:,l,node{m}.N(1:end-1))); % -1 to exclude the virtual node
-            Xm = squeeze(X(:,l,[node{m}.N(1:end-1);m])); % virtual node has real node's observations
+            node{m}.X = squeeze(X(:,l,node{m}.N)); 
+            Xm = squeeze(X(:,l,node{m}.N)); % virtual node has real node's observations
             
 %             % Assign covariance from actual covariance calculated above
 %             if l==1 && iter==1 
@@ -226,134 +209,71 @@ for l=1:5
 %             end
 
             % Calculate local covariance
-            % Initialize
-%             if l==1
+%             % Calculation only needs to happen when the node changes
+%             if iter==1
 %                 for k=1:Khalf
-% %                     node{m}.R{k} = 1e-12*eye(Nlen-1);
-%                     Rm(k,:,:) = 1e-12*eye(Nlen-1);
+%                     Rm(k,:,:) = (1-gamma)*node{m}.R{k} + gamma*(Xm(k,:).'*Xm(k,:));
 %                 end
 %             end
-            % Calculation only needs to happen when the node changes
+
             if iter==1
                 for k=1:Khalf
-%                     node{m}.R{k} = (1-gamma)*node{m}.R{k} + gamma*(node{m}.X(k,:).'*node{m}.X(k,:));
-                    Rm(k,:,:) = (1-gamma)*node{m}.R{k} + gamma*(Xm(k,:).'*Xm(k,:));
+                    Rm(k,:,:) = Xm(k,:).'*Xm(k,:) + 1e-6*eye(Nlen);
                 end
             end
+
             
             % Initialize temp vars
-%             AAsum = zeros(Nlen-1,Nlen-1);
             AAsum = zeros(Nlen,Nlen);
-%             ALAWsum = zeros(Nlen-1,1);
             ALAWsum = zeros(Nlen,1);
-%             AARsum = zeros(Nlen-1,Nlen-1);
             AARsum = zeros(Nlen,Nlen);
-%             ALAWARdsum = zeros(Nlen-1,1);
             ALAWARdsum = zeros(Nlen,1);
             WRealNew = ones(Khalf,Nlen);
             WVirtNew = ones(Khalf,1);
-            LambdaRealNew{1} = ones(Khalf,2,Nlen);  % WHY DO THESE START AS ONES? because they are similar to weights? which means to leave the system unchanged they need to be ones, not zeros ? 
-            LambdaRealNew{2} = ones(Khalf,Nlen);    % For the virtual node
-            LambdaVirtNew = ones(Khalf,1);
-%             LambdaNew = ones(Khalf,2,M); 
+            LambdaRealNew = ones(Khalf,2,Nlen);  % WHY DO THESE START AS ONES? because they are similar to weights? which means to leave the system unchanged they need to be ones, not zeros ? 
             bk = zeros(Khalf,1);
             
             % Calculate primal update for real node
-            for k=1:Khalf
-                
-%                 dTmp = (Nm(1:end-1)==m) * dm(k);
+            for k=1:Khalf                
                 dTmp = (Nm(1:end)==m) * dm(k);
                 
-%                 for n=1:node{m}.Nlen-1 % -1 because I want to exclude the virtual node for now
-                for n=1:Nlen
-                    
+                for n=1:Nlen                    
                     % for W update
-%                     AmnTmp = node{m}.Amn{n}(:,1:node{m}.Nlen-1);
                     AmnTmp = +node{m}.Amn{n};
                     AAsum = AAsum+(AmnTmp.'*AmnTmp);
-                    if n<Nlen
-                        LambdanmTmp = node{Nm(n)}.L{1}(k,:,(node{Nm(n)}.N==m)).'; % This is just the real-real lambdas
-                        AnmTmp = flipud(node{Nm(n)}.Amn{node{Nm(n)}.N==m});
-                        WnTmp = node{Nm(n)}.W(k,:).';
-                        ALAWsum = ALAWsum + (AmnTmp.'*(LambdanmTmp-AnmTmp*WnTmp));
-                    else 
-                        LambdanmTmp = node{Nm(n)}.L{1}(k);
-%                         AnmTmp = node{Nm(n)}.Amn{node{Nm(n)}.N==m};
-                        AnmTmp = 1;
-                        WnTmp = node{Nm(n)}.W(k);
-                        ALAWsum = ALAWsum + (AmnTmp.'*(LambdanmTmp-AnmTmp*WnTmp));
-                    end
-                    
-
-
+                    LambdanmTmp = node{Nm(n)}.L(k,:,(node{Nm(n)}.N==m)).'; % This is just the real-real lambdas
+                    AnmTmp = flipud(node{Nm(n)}.Amn{node{Nm(n)}.N==m});                        
+                    WnTmp = node{Nm(n)}.W(k,:).';
+                    ALAWsum = ALAWsum + (AmnTmp.'*(LambdanmTmp-AnmTmp*WnTmp));
+      
                     % For Lambda,zk update
                     AmnRinv = AmnTmp/squeeze(Rm(k,:,:));
                     AARsum = AARsum + (AmnTmp.'*AmnRinv); 
                     ALAWARdsum = ALAWARdsum + (AmnTmp.'*(LambdanmTmp-AnmTmp*WnTmp-AmnRinv*dTmp));  
                 end
-
-                
-%                 WRealNew(k,1:Nlen-1) = (AAsum+squeeze(Rm(k,:,:)))\(ALAWsum+dTmp);
                 WRealNew(k,1:Nlen) = (AAsum+squeeze(Rm(k,:,:)))\(ALAWsum+dTmp);
-%                 zk = (AARsum+eye(Nlen-1))\ALAWARdsum;
                 zk = (AARsum+eye(Nlen))\ALAWARdsum;
 
                 % Lambda update requires twice around the neighboring nodes:
                 % once for finding the summations in zk, and once for Lambda
                 % itself.
                 for n=1:node{m}.Nlen
-                    
-                    if n<Nlen
-%                     LambdanmTmp = node{Nm(n)}.L(k,:,(node{Nm(n)}.N==m)).';
-                        LambdanmTmp = node{Nm(n)}.L{1}(k,:,(node{Nm(n)}.N==m)).';
-                        AnmTmp = flipud(node{Nm(n)}.Amn{node{Nm(n)}.N==m});
-                        WnTmp = node{Nm(n)}.W(k,:).';
-%                       AmnTmp = node{m}.Amn{n}(:,1:end-1);      
-                        AmnTmp = node{m}.Amn{n};  
-%                       LambdaNew(k,:,n) = LambdanmTmp-AnmTmp*WnTmp-AmnTmp/squeeze(Rm(k,:,:))*(dTmp+zk);
-                        LambdaRealNew{1}(k,:,n) = LambdanmTmp-AnmTmp*WnTmp-AmnTmp/squeeze(Rm(k,:,:))*(dTmp+zk);
-                    else
-                        LambdanmTmp = node{Nm(n)}.L{1}(k);
-                        AnmTmp = 1;
-                        WnTmp = node{Nm(n)}.W(k,:).';
-%                       AmnTmp = node{m}.Amn{n}(:,1:end-1);      
-                        AmnTmp = node{m}.Amn{n};  
-%                       LambdaNew(k,:,n) = LambdanmTmp-AnmTmp*WnTmp-AmnTmp/squeeze(Rm(k,:,:))*(dTmp+zk);
-                        LambdaRealNew{2}(k,n) = LambdanmTmp-AnmTmp*WnTmp-AmnTmp/squeeze(Rm(k,:,:))*(dTmp+zk);
-                    end
+                    LambdanmTmp = node{Nm(n)}.L(k,:,(node{Nm(n)}.N==m)).';
+                    AnmTmp = flipud(node{Nm(n)}.Amn{node{Nm(n)}.N==m});
+                    WnTmp = node{Nm(n)}.W(k,:).';
+                    AmnTmp = node{m}.Amn{n};  
+                    LambdaRealNew(k,:,n) = LambdanmTmp-AnmTmp*WnTmp-AmnTmp/squeeze(Rm(k,:,:))*(dTmp+zk);
                 end 
                 
                 % Primal update for virtual node m+M
                 WnTmp = Wm(k,:); % Comes from m because m is n for virtual node m+M
-%                 AnmTmp = flipud(node{m}.Amn{end}); % Its ok to use end because m+M is always last 
                 AnmTmp = node{m}.Amn{end};
-%                 AmnTmp = node{m+M}.Amn{1};
-%                 LambdanmTmp = node{m}.L(k,:,end);
-                LambdanmTmp = node{m}.L{2}(k);
-                bk = 2*WnTmp*AnmTmp.'*1-1*LambdanmTmp.'; % 1 because Amn is always 1 when m is a virtual node
-                WVirtNew(k) = (-bk+sign(bk)*min(abs(bk),alpha))/(1);
-
-                % Dual update for virtual node m+M
-                LambdamnTmp = node{m+M}.L{1}(k);
-                LambdaVirtNew(k) = 2*LambdanmTmp*LambdamnTmp.'-WnTmp*AnmTmp.';
-                if LambdaVirtNew(k) > alpha
-                    LambdaVirtNew(k) = alpha; 
-                elseif LambdaVirtNew(k) < -alpha
-                    LambdaVirtNew(k) = -alpha; 
-                end
-%                 if LambdaVirtNew(k,2) > alpha
-%                     LambdaVirtNew(k,2) = alpha; 
-%                 elseif LambdaVirtNew(k,2) < -alpha
-%                     LambdaVirtNew(k,2) = -alpha; 
-%                 end                  
+                LambdanmTmp = node{m}.L(k);
             end   
 
             % Assign new W and L values to node m and m+M
             node{m}.W = WRealNew;
-            node{m+M}.W = WVirtNew;
-            node{m}.L{1} = LambdaRealNew{1};
-            node{m}.L{2} = LambdaRealNew{2};
-            node{m+M}.L{1} = LambdaVirtNew;
+            node{m}.L = LambdaRealNew;
         end
     end  
     for k=1:Khalf
@@ -362,8 +282,14 @@ for l=1:5
     
     % Generate output using updated primal and dual weights
     for m=1:M
-        Y(:,l) = Y(:,l) + (1/M)*sum(node{m}.W(:,1:end-1).*node{m}.X(:,1:end-1),2); % -1 because the virtual node's weight and observation should not contribute to the output
-    end       
+        Y(:,l) = Y(:,l) + (1/M)*node{m}.W(:,node{m}.N==m).*node{m}.X(:,node{m}.N==m);
+        Wsave(:,m) = (1/M)*node{m}.W(:,node{m}.N==m);
+        Wnorm(l,m) = norm(Wsave);
+%         Y(:,l) = Y(:,l) + (1/M)*sum(node{m}.W(:,1:end-1).*node{m}.X(:,1:end-1),2); % -1 because the virtual node's weight and observation should not contribute to the output
+    end     
+%     figure; imagesc(Wsave);
+
+%     Wnorm(l) = norm(Wsave);
 end
 
 
@@ -375,7 +301,8 @@ figure; plot(y);
 
 
 
-
+%%
+figure; plot(Wnorm)
 
 
 
