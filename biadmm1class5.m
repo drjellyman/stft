@@ -49,7 +49,7 @@ fs = 16e3;
 
 % Truncate to desired length, ensuring that the length is a multiple of 
 % the window length.
-K = 2^11+1; % K = window length in samples, and the number of frequency bins
+K = 2^12+1; % K = window length in samples, and the number of frequency bins
 Khalf = (K-1)/2-1;
 tls = 5; % tls = target length in seconds
 tl = tls*fs-mod(tls*fs,K-1)+1; % tl = target length in samples, adjusted for window length and sampling frequency
@@ -64,7 +64,7 @@ for ns=1:Nsrcs
 end
 
 %% Place sensors
-M = 20; % M = number of sensors
+M = 3; % M = number of sensors
 
 % Create nodes
 node = cell(2*M,1);
@@ -93,16 +93,17 @@ for ns=1:Nsrcs
 end
 
 %% Display layout
-figure; plot3(Mloc(1,:), Mloc(2,:), Mloc(3,:), '*'); grid on; hold on; 
-plot3(sloc(1,1), sloc(2,1), sloc(3,1), 'o'); 
-plot3(sloc(1,2:end), sloc(2,2:end), sloc(3,2:end), '^'); legend('Sensors','Target','Interferer')
-set(gca, 'fontsize', 14);
+% figure; plot3(Mloc(1,:), Mloc(2,:), Mloc(3,:), '*'); grid on; hold on; 
+% plot3(sloc(1,1), sloc(2,1), sloc(3,1), 'o'); 
+% plot3(sloc(1,2:end), sloc(2,2:end), sloc(3,2:end), '^'); legend('Sensors','Target','Interferer')
+% set(gca, 'fontsize', 14);
 
 %% Create ATFs and observations for full fft version
 fdom = (fs/(tl-1)) * (1:(tl-1)/2-1);
 c = 343;
 L = (length(s{1}(1:end-1))/(K-1))*2+1;
 X = zeros(Khalf,L,M);
+xsave = zeros(length(s{1}),M);
 for m=1:M
     Xfft = zeros((tl-1)/2-1,1);
     for ns=1:Nsrcs
@@ -110,7 +111,8 @@ for m=1:M
         Xfft = Xfft + (A .* S{ns});
     end
     Xfft = [0;Xfft;0;0;conj(flipud(Xfft))];
-    x = ifft(Xfft) + 0.0005*randn(tl,1);
+    x = ifft(Xfft) + 0.0001*randn(tl,1);
+    xsave(:,m) = x;
     xPadded = [zeros((K-1)/2,1);x(1:end-1);zeros((K-1)/2,1)];
     XTmp = stft(xPadded,K);
     X(:,:,m) = XTmp(2:(K-1)/2,:);
@@ -126,6 +128,29 @@ end
 %         R{k} = R{k} + (1/L)*squeeze(X(k,l,:))*squeeze(X(k,l,:))';
 %     end
 % end
+
+%% Calculate covariances over all time
+R = cell(Khalf,1);
+for k=1:Khalf
+    for l=1:L
+        if l==1
+            R{k} = zeros(M);
+        end
+        XTmp = squeeze(X(k,l,:));
+        R{k} = R{k} + (1/L)*(XTmp*XTmp');
+    end
+end
+
+%% 
+RR = xsave'*xsave;
+RRcondition = rcond(RR)
+figure; imagesc(abs(RR));
+
+RSum = zeros(M);
+for k=1:Khalf
+    RSum = RSum + R{k}; % RSum is the covariance summed over time and frequency bins
+end
+figure; imagesc(abs(RSum));
 
 %% Find sensor to sensor distances
 sensd = zeros(M,M); % sensd = sensor to sensor distance
@@ -149,8 +174,8 @@ fprintf('The minimum number of neighbors was %d. \nThe mean number of neighbors 
 fdomShort = (fs/(K-1)) * (1:((K-1)/2)-1);
 for m=1:M
     % Initialize Lambdas and weights
-    node{m}.L = zeros(Khalf,2,node{m}.Nlen); % These are for node m's real neighbors including itself
-    node{m}.W = zeros(Khalf,node{m}.Nlen); % Note that this includes node m itself, node m's real neighbors, and node m's virtual neighbor (m+M)
+    node{m}.L = ones(Khalf,2,node{m}.Nlen); % These are for node m's real neighbors including itself
+    node{m}.W = ones(Khalf,node{m}.Nlen); % Note that this includes node m itself, node m's real neighbors, and node m's virtual neighbor (m+M)
     
     % Initialize Amn for all nodes
     Amn = cell(node{m}.Nlen,1); 
@@ -177,7 +202,9 @@ Y = zeros(Khalf,L);
 %% Iterative update
 % Step through windows
 gamma = 0.4; % No reason for 0.4, this is just what seems to work
-for l=1:3
+Ltmp = 10;
+Wsave = zeros(Khalf,Ltmp,M);
+for l=1:Ltmp
     
     % Step through real (and virtual) nodes for primal/dual update
     for m=1:M
@@ -218,7 +245,8 @@ for l=1:3
 
             if iter==1
                 for k=1:Khalf
-                    Rm(k,:,:) = Xm(k,:).'*Xm(k,:) + 1e-6*eye(Nlen);
+%                     Rm(k,:,:) = Xm(k,:).'*Xm(k,:) + 1e-6*eye(Nlen);
+                    Rm(k,:,:) = RR;%RSum;
                 end
             end
 
@@ -282,16 +310,11 @@ for l=1:3
     
     % Generate output using updated primal and dual weights
     for m=1:M
-        Y(:,l) = Y(:,l) + (1/M)*node{m}.W(:,node{m}.N==m).*node{m}.X(:,node{m}.N==m);
-        Wsave(:,m) = (1/M)*node{m}.W(:,node{m}.N==m);
-        Wnorm(l,m) = norm(Wsave);
+        Y(:,l) = Y(:,l) + (1/M)*conj(node{m}.W(:,node{m}.N==m)).*node{m}.X(:,node{m}.N==m);
+        Wsave(:,l,m) = (1/M)*node{m}.W(:,node{m}.N==m);
 %         Y(:,l) = Y(:,l) + (1/M)*sum(node{m}.W(:,1:end-1).*node{m}.X(:,1:end-1),2); % -1 because the virtual node's weight and observation should not contribute to the output
     end     
-%     figure; imagesc(Wsave);
-
-%     Wnorm(l) = norm(Wsave);
 end
-
 
 %% Calculate BF output
 Y = [zeros(1,L);Y;zeros(2,L);conj(flipud(Y))];
@@ -299,18 +322,41 @@ mySpectrogram(Y);
 y = myOverlapAdd(Y);
 figure; plot(y);
 
+%% A1) Frequency domain Frost optimum weights
+d = zeros(Khalf,M);
+for m=1:M
+    d(:,m) = node{m}.d;
+end
+
+Wopt = zeros(Khalf,M);
+dk = zeros(Khalf,M);
+for k=1:Khalf
+    dk = d(k,:).';
+    Wopt(k,:) = RSum\dk/(dk'/RSum*dk); 
+end
+
+% Find output using optimum weights
+Yopt = zeros(Khalf,L);
+for l=1:L
+    Xtmp = squeeze(X(:,l,:));
+    Yopt(:,l) = sum(conj(Wopt).*Xtmp,2);
+end
+Yopt = [zeros(1,L);Yopt;zeros(2,L);conj(flipud(Yopt))];
+yopt = myOverlapAdd(Yopt);
 
 
-%%
-figure; plot(Wnorm)
+%% MSE between W and Wopt
+WWoptMSE = zeros(Ltmp,1);
+for l=1:Ltmp
+    Wtmp = squeeze(Wsave(:,l,:));
+    WWoptMSE(l) = mean(mean((Wtmp-Wopt).*conj(Wtmp-Wopt)));
+%     WWoptMSE(l) = mean(mean((squeeze(Wsave(:,l,:))-Wopt).^2));
+end
+figure; plot((WWoptMSE)); grid on;
 
-
-
-
-
-
-
-
+%% Let's have a look at W and Wopt
+figure; imagesc(abs(Wopt))
+figure; imagesc(abs(squeeze(Wsave(:,Ltmp,:))))
 
 
 

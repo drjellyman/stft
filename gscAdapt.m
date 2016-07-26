@@ -64,25 +64,25 @@ c = 343; % Speed of sound (m/s)
 dt = dz*sin(sAng)/c; % dt = time delay between sensors (s)
 dd = dz*sin(sAng(1));
 
-figure; hold on;
+% figure; hold on;
 d = 0.7;
 sPos = mean(zPos,2) + [d*sin(sAng(1)), d*cos(sAng(1)),0]';
-plot(sPos(1),sPos(2),'r*');
+% plot(sPos(1),sPos(2),'r*');
 nPos = mean(zPos,2) + [d*sin(sAng(2)), d*cos(sAng(2)),0]';
-plot(nPos(1),nPos(2),'r^');
+% plot(nPos(1),nPos(2),'r^');
 for m=1:M
-    plot(zPos(1,m),zPos(2,m),'bo');
+%     plot(zPos(1,m),zPos(2,m),'bo');
 end
-xlim([0.5, 2.5]); ylim([0.5, 2]);
-legend('Target','Interference','Sensors');
-grid on; 
-set(gca, 'fontsize', 14);
+% xlim([0.5, 2.5]); ylim([0.5, 2]);
+% legend('Target','Interference','Sensors');
+% grid on; 
+% set(gca, 'fontsize', 14);
 
 for m=1:M
     dist(:,m) = [norm(sPos(1)-zPos(:,m)), norm(sPos(2)-zPos(:,m))];
 end
-figure; plot(dist(1,:),'*:')
-grid on; set(gca,'fontsize',14); xlim([1,8]); xlabel('Sensor'); ylabel('Distance (m)');
+% figure; plot(dist(1,:),'*:')
+% grid on; set(gca,'fontsize',14); xlim([1,8]); xlabel('Sensor'); ylabel('Distance (m)');
 
 % figure; plot(fliplr([1:8]*dd),'*:'); grid on; set(gca,'fontsize',14);xlim([1,8]);xlabel('Sensor'); ylabel('Distance (m)');
 
@@ -109,82 +109,88 @@ for l = 1:L
     end
 end
 z1 = myOverlapAdd(Z(:,:,1));
-subplot(3,1,3); plot(z1); set(gca,'fontsize',14); legend('Observation Mic #1');
-axis tight;ylim([-0.06, 0.06]);
+% subplot(3,1,3); plot(z1); set(gca,'fontsize',14); legend('Observation Mic #1');
+% axis tight;ylim([-0.06, 0.06]);
 
-return
+
 
 %% Remove redundant frequency info
 
 %% A1) Frequency domain Frost optimum weights
 
-% for k=1:K
-%     R = zeros(M,M); % R is the spatial covariance of the inputs
-%     for l=1:L
-%         Ztmp = squeeze(Z(k,l,:));
-%         R = R + Ztmp*Ztmp'; % Sum the covariance over l
-%     end
-%     R = R + 1e-9*eye(M); % Diagonal loading
-%     Rinv = inv(R);
-%     Ak = A(k,:).';
-%     W(k,:) = Rinv*Ak/(Ak'*Rinv*Ak); % Calculate optimum weights vector 
-% end
-% Wopt = W;
+for k=1:K
+    R = zeros(M,M); % R is the spatial covariance of the inputs
+    for l=1:L
+        Ztmp = squeeze(Z(k,l,:));
+        R = R + Ztmp*Ztmp'; % Sum the covariance over l
+    end
+    R = R + 1e-9*eye(M); % Diagonal loading
+    Rinv = inv(R);
+    Ak = A(k,:).';
+    W(k,:) = Rinv*Ak/(Ak'*Rinv*Ak); % Calculate optimum weights vector 
+end
+Wopt = W;
  
-% Find output using optimum weights
-% Y = zeros(K,L);
-% for l=1:L
-%     Ztmp = squeeze(Z(:,l,:));
-%     Y(:,l) = sum(conj(W).*Ztmp,2).';
-% end
-% y = myOverlapAdd(Y);
-% y = y((K-1)/2+1:end-(K-1)/2);
+%Find output using optimum weights
+Y = zeros(K,L);
+for l=1:L
+    Ztmp = squeeze(Z(:,l,:));
+    Y(:,l) = sum(conj(W).*Ztmp,2).';
+end
+y = myOverlapAdd(Y);
+y = y((K-1)/2+1:end-(K-1)/2);
 % figure; plot(s1); hold on; plot(y); legend('Target signal','BF output');
 % set(gca,'fontsize',14); grid on; axis tight; ylim([-0.05, 0.05]);
 
 
 %% A2) Adaptive Frost
-% 
-% for k = 1:K
-%     Atmp = A(k,:).';
-%     P(k,:,:) = eye(M) - (Atmp*Atmp')/(norm(Atmp)^2);
-%     F(k,:) = Atmp/(norm(Atmp)^2);
-% end
-% W = F; % Initialize weight vector
-% 
-% % Iterate
-% mu = 0.0002; % mu = step size
-% lambda = 0;%1e-12; % lambda = diagonal loading % 
-% % muMaybe = zeros(K,L);
-% for l=1:L
-%     Ztmp = squeeze(Z(:,l,:));
+
+for k = 1:K
+    Atmp = A(k,:).';
+    P(k,:,:) = eye(M) - (Atmp*Atmp')/(norm(Atmp)^2);
+    F(k,:) = Atmp/(norm(Atmp)^2);
+end
+W = F; % Initialize weight vector
+
+% Iterate
+mu = 0.002; % mu = step size
+lambda = 0;%1e-12; % lambda = diagonal loading % 
+% muMaybe = zeros(K,L);
+for l=1:L
+    Ztmp = squeeze(Z(:,l,:));
 %     Y(:,l) = sum(W.*Ztmp,2); 
-%     for k = 1:K
-%         Ptmp = squeeze(P(k,:,:));
-%         Ztmp = squeeze(Z(k,l,:));
-% %         lambda = 2*Ztmp'*Ztmp; % optimal lambda is 2 * noise power?
-% %         doesn't work
-%         Ftmp = F(k,:).';
-%         Wtmp = W(k,:).';
-%         Rtmp = Ztmp*Ztmp'+lambda*eye(M);
-% %         PowScale = 0.01*Ztmp'*Ztmp;
-% %         W(k,:) = Ptmp*(Wtmp-mu*Ztmp*Y(k,l)')+Ftmp; % Update weights
-%         W(k,:) = Ptmp*(Wtmp-mu*Rtmp*Wtmp)+Ftmp; % Update weights
-% 
-%     end
-% %     Wdiff(l) = norm(Wopt-W);
-% end
-% y = myOverlapAdd(Y);
+    Y(:,l) = sum(conj(W).*Ztmp,2);
+    for k = 1:K
+        Ptmp = squeeze(P(k,:,:));
+        Ztmp = squeeze(Z(k,l,:));
+%         lambda = 2*Ztmp'*Ztmp; % optimal lambda is 2 * noise power?
+%         doesn't work
+        Ftmp = F(k,:).';
+        Wtmp = W(k,:).';
+        Rtmp = Ztmp*Ztmp'+lambda*eye(M);
+%         PowScale = 0.01*Ztmp'*Ztmp;
+%         W(k,:) = Ptmp*(Wtmp-mu*Ztmp*Y(k,l)')+Ftmp; % Update weights
+        W(k,:) = Ptmp*(Wtmp-mu*Rtmp*Wtmp)+Ftmp; % Update weights
+
+    end
+    Wdiff(l) = norm(Wopt-W);
+    WWoptMSE(l) = mean(mean((Wopt-W).*conj(Wopt-W)));
+end
+y = myOverlapAdd(Y);
 % figure; plot(y);
-% figure; plot(Wdiff); grid on; xlabel('No. of iterations'); ylabel('Norm(Wopt-W)');
+figure; plot(Wdiff); grid on; xlabel('No. of iterations'); ylabel('Norm(Wopt-W)');
 % set(gca,'fontsize',14); axis tight;
-% figure; hold on;
+
+figure; plot(WWoptMSE); grid on; xlabel('No. of iterations'); ylabel('MSE(Wopt-W)');
+% set(gca,'fontsize',14); axis tight;
+
+% figure; hold on;`
 % for k = 1:K
 %     plot(muMaybe(k,:));    
 % end
 
 %% A2.b) Adaptive Frost using actual covariance
-% mu = 0.01; % mu = step size
+% mu = 0.001; % mu = step size
 % R = zeros(K,M,M);
 % for k=1:K
 %     for l=1:L
@@ -192,12 +198,13 @@ return
 %         R(k,:,:) = squeeze(R(k,:,:)) + Ztmp*Ztmp'; % Sum the covariance over l
 %     end    
 % end
-
+% 
 % % Iteration over time
 % Wdiff = zeros(l,1);
 % for l=1:L
 %     Ztmp = squeeze(Z(:,l,:));
-%     Y(:,l) = sum(W.*Ztmp,2); 
+% %     Y(:,l) = sum(W.*Ztmp,2); 
+%     Y(:,l) = sum(conj(W).*Ztmp,2); 
 %     for k = 1:K
 %         Ptmp = squeeze(P(k,:,:));
 %         Ztmp = squeeze(Z(k,l,:));
@@ -208,17 +215,23 @@ return
 %         W(k,:) = Ptmp*(Wtmp-mu*Rtmp*Wtmp)+Ftmp; % Update weights
 %     end
 %     Wdiff(l) = norm(Wopt-W);
+%     WWoptMSE2(l) = mean(mean((Wopt-W).*conj(Wopt-W)));
 % end
 % y = myOverlapAdd(Y);
-% figure; plot(y); hold on; plot(s1); legend('BF Output','Target'); set(gca,'fontsize',14);
-% grid on; 
-% xc = xcorr(s1,y);
-% [xcmax,xcmaxi] = max(xc)
-% offset = xcmaxi-len_s
-% figure; plot(y(238:end)); hold on ; plot(s1); 
+% % figure; plot(y); hold on; plot(s1); legend('BF Output','Target'); set(gca,'fontsize',14);
+% % grid on; 
+% 
+% 
+% % xc = xcorr(s1,y);
+% % [xcmax,xcmaxi] = max(xc)
+% % offset = xcmaxi-len_s
+% % figure; plot(y(238:end)); hold on ; plot(s1); 
 % 
 % figure; plot(Wdiff); grid on; xlabel('No. of iterations'); ylabel('Norm(Wopt-W)');
-% set(gca,'fontsize',14); axis tight
+% % set(gca,'fontsize',14); axis tight
+% 
+% figure; plot(WWoptMSE2); grid on; xlabel('No. of iterations'); ylabel('MSE(Wopt-W)');
+% % set(gca,'fontsize',14); axis tight
 
 %% B) GSC freq domain
 
@@ -333,3 +346,5 @@ return
 % audiowrite('Target.flac',s1,fs);
 % audiowrite('Observation.flac',z1,fs);
 % audiowrite('BFOutput-AdaptSampleCov.flac',y,fs);
+
+%%
