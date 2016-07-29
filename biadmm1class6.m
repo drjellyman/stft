@@ -219,122 +219,150 @@ end
 % Initialize output Y
 Y = zeros(Khalf,L);
 
-%% Iterative update
-% Step through windows
-% gamma = 0.4; % No reason for 0.4, this is just what seems to work
-Ltmp = 10;
+%% Adaptive algorithm (new based on biadmm_1bin2.m)
+Ltmp = 10; % For shorter run times
+ITER1 = 1;
+ITER2 = 1;
 Wsave = zeros(Khalf,Ltmp,M);
 for l=1:Ltmp
-    
-    % Step through real (and virtual) nodes for primal/dual update
-    for m=1:M
-        [l,m]
-        Nlen = node{m}.Nlen;
-        Rm = zeros(Khalf,Nlen,Nlen);
-        Xm = zeros(Khalf,Nlen);
-        Nm = node{m}.N;
-        dm = node{m}.d;
-        Wm = node{m}.W;
-        
-        % iter sets the number of iterative updates per window
-        for iter=1
-            
-            % Get observations
-            node{m}.X = squeeze(X(:,l,node{m}.N)); 
-            Xm = squeeze(X(:,l,node{m}.N)); % virtual node has real node's observations
-            
-%             % Assign covariance from actual covariance calculated above
-%             if l==1 && iter==1 
-%                 for k=1:Khalf
-%                     RTemp = zeros(node{m}.Nlen-1);
-%                     for n=1:node{m}.Nlen-1
-%                         RTemp(:,n) = R{k}(m,node{m}.N(1:end-1)).';
-%                         RTemp(n,:) = R{k}(m,node{m}.N(1:end-1));
-%                     end                
-%                     node{m}.R{k} = RTemp;
-%                 end
-%             end
+    for iter1=1:ITER1
+        for k=1:Khalf
+            for m=1:M
+                for iter2=1:ITER2
+                    [l,iter1,k,m,iter2]
+                    Nlen = node{m}.Nlen;
+                    AApR = zeros(Nlen);
+                    ALAWD = zeros(Nlen,1);
+                    AARpI = zeros(Nlen);
+                    ALAWARD = zeros(Nlen,1);
+                    for n=1:Nlen
+                        Amn = node{m}.Amn{n};
+                        AApR = AApR + (Amn.'*Amn+R);
+                        Lnm = node{node{m}.N(n)}.L(k,:,node{node{m}.N(n)}.N==m).';
+                        Anm = flipud(node{node{m}.N(n)}.Amn{node{node{m}.N(n)}.N==m});
+                        Wn = node{node{m}.N(n)}.W(k,:).';
+                        dm = zeros(Nlen,1);
+                        dm(m) = node{m}.d(k);
+                        ALAWD = ALAWD + (Amn.'*(Lnm-Anm*Wn)+dm);
+                        AARpI = AARpI + (Amn.'*Amn/R+eye(Nlen));
+                        ALAWARD = ALAWARD + (Amn.'*(Lnm-Anm*Wn-Amn/R*dm));
+                        
+                    end
+                    zm = AARpI\ALAWARD;
+                    node{m}.W(k,:) = AApR\ALAWD;
 
-            % Calculate local covariance
-%             % Calculation only needs to happen when the node changes
-%             if iter==1
-%                 for k=1:Khalf
-%                     Rm(k,:,:) = (1-gamma)*node{m}.R{k} + gamma*(Xm(k,:).'*Xm(k,:));
-%                 end
-%             end
-
-            if iter==1
-                for k=1:Khalf
-%                     Rm(k,:,:) = Xm(k,:).'*Xm(k,:) + 1e-6*eye(Nlen);
-                    Rm(k,:,:) = R;%RSum;
+                    for n=1:Nlen
+                        Lnm = node{node{m}.N(n)}.L(k,:,node{node{m}.N(n)}.N==m).';
+                        Anm = flipud(node{node{m}.N(n)}.Amn{node{node{m}.N(n)}.N==m});
+                        Wn = node{node{m}.N(n)}.W(k,:).';
+                        Amn = node{m}.Amn{n};
+                        dm = zeros(Nlen,1);
+                        dm(m) = node{m}.d(k);
+                        node{m}.L(k,:,n) = Lnm-Anm*Wn-Amn/R*(dm+zm);
+                    end
                 end
             end
-
-            
-            % Initialize temp vars
-            AAsum = zeros(Nlen,Nlen);
-            ALAWsum = zeros(Nlen,1);
-            AARsum = zeros(Nlen,Nlen);
-            ALAWARdsum = zeros(Nlen,1);
-            WRealNew = zeros(Khalf,Nlen);
-            WVirtNew = zeros(Khalf,1);
-            LambdaRealNew = zeros(Khalf,2,Nlen);  % WHY DO THESE START AS ONES? because they are similar to weights? which means to leave the system unchanged they need to be ones, not zeros ? 
-            bk = zeros(Khalf,1);
-            
-            % Calculate primal update for real node
-            for k=1:Khalf                
-                dTmp = (Nm(1:end)==m) * dm(k);
-                
-                for n=1:Nlen                    
-                    % for W update
-                    AmnTmp = +node{m}.Amn{n};
-                    AAsum = AAsum+(AmnTmp.'*AmnTmp);
-                    LambdanmTmp = node{Nm(n)}.L(k,:,(node{Nm(n)}.N==m)).'; % This is just the real-real lambdas
-                    AnmTmp = flipud(node{Nm(n)}.Amn{node{Nm(n)}.N==m});                        
-                    WnTmp = node{Nm(n)}.W(k,:).';
-                    ALAWsum = ALAWsum + (AmnTmp.'*(LambdanmTmp-AnmTmp*WnTmp));
-      
-                    % For Lambda,zk update
-                    AmnRinv = AmnTmp/squeeze(Rm(k,:,:));
-                    AARsum = AARsum + (AmnTmp.'*AmnRinv); 
-                    ALAWARdsum = ALAWARdsum + (AmnTmp.'*(LambdanmTmp-AnmTmp*WnTmp-AmnRinv*dTmp));  
-                end
-                WRealNew(k,1:Nlen) = (AAsum+squeeze(Rm(k,:,:)))\(ALAWsum+dTmp);
-                zk = (AARsum+eye(Nlen))\ALAWARdsum;
-
-                % Lambda update requires twice around the neighboring nodes:
-                % once for finding the summations in zk, and once for Lambda
-                % itself.
-                for n=1:node{m}.Nlen
-                    LambdanmTmp = node{Nm(n)}.L(k,:,(node{Nm(n)}.N==m)).';
-                    AnmTmp = flipud(node{Nm(n)}.Amn{node{Nm(n)}.N==m});
-                    WnTmp = node{Nm(n)}.W(k,:).';
-                    AmnTmp = node{m}.Amn{n};  
-                    LambdaRealNew(k,:,n) = LambdanmTmp-AnmTmp*WnTmp-AmnTmp/squeeze(Rm(k,:,:))*(dTmp+zk);
-                end 
-                
-                % Primal update for virtual node m+M
-                WnTmp = Wm(k,:); % Comes from m because m is n for virtual node m+M
-                AnmTmp = node{m}.Amn{end};
-                LambdanmTmp = node{m}.L(k);
-            end   
-
-            % Assign new W and L values to node m and m+M
-            node{m}.W = WRealNew;
-            node{m}.L = LambdaRealNew;
+            Wsave(k,l,:) = [node{1}.W(k,1),node{2}.W(k,2),node{3}.W(k,3)];
         end
-    end  
-    for k=1:Khalf
-        node{m}.R{k} = squeeze(Rm(k,:,:));
     end
-    
-    % Generate output using updated primal and dual weights
-    for m=1:M
-        Y(:,l) = Y(:,l) + (1/M)*conj(node{m}.W(:,node{m}.N==m)).*node{m}.X(:,node{m}.N==m);
-        Wsave(:,l,m) = (1/M)*node{m}.W(:,node{m}.N==m);
-%         Y(:,l) = Y(:,l) + (1/M)*sum(node{m}.W(:,1:end-1).*node{m}.X(:,1:end-1),2); % -1 because the virtual node's weight and observation should not contribute to the output
-    end     
 end
+
+%% Iterative update (old)
+% % Step through windows
+% % gamma = 0.4; % No reason for 0.4, this is just what seems to work
+% Ltmp = 10;
+% Wsave = zeros(Khalf,Ltmp,M);
+% for l=1:Ltmp
+%     
+%     % Step through real (and virtual) nodes for primal/dual update
+%     for m=1:M
+%         [l,m]
+%         Nlen = node{m}.Nlen;
+%         Rm = zeros(Khalf,Nlen,Nlen);
+%         Xm = zeros(Khalf,Nlen);
+%         Nm = node{m}.N;
+%         dm = node{m}.d;
+%         Wm = node{m}.W;
+%         
+%         % iter sets the number of iterative updates per window
+%         for iter=1
+%             
+%             % Get observations
+%             node{m}.X = squeeze(X(:,l,node{m}.N)); 
+%             Xm = squeeze(X(:,l,node{m}.N)); % virtual node has real node's observations
+% 
+%             if iter==1
+%                 for k=1:Khalf
+% %                     Rm(k,:,:) = Xm(k,:).'*Xm(k,:) + 1e-6*eye(Nlen);
+%                     Rm(k,:,:) = R;%RSum;
+%                 end
+%             end
+% 
+%             
+%             % Initialize temp vars
+%             AAsum = zeros(Nlen,Nlen);
+%             ALAWsum = zeros(Nlen,1);
+%             AARsum = zeros(Nlen,Nlen);
+%             ALAWARdsum = zeros(Nlen,1);
+%             WRealNew = zeros(Khalf,Nlen);
+%             WVirtNew = zeros(Khalf,1);
+%             LambdaRealNew = zeros(Khalf,2,Nlen);  % WHY DO THESE START AS ONES? because they are similar to weights? which means to leave the system unchanged they need to be ones, not zeros ? 
+%             bk = zeros(Khalf,1);
+%             
+%             % Calculate primal update for real node
+%             for k=1:Khalf                
+%                 dTmp = (Nm(1:end)==m) * dm(k);
+%                 
+%                 for n=1:Nlen                    
+%                     % for W update
+%                     AmnTmp = +node{m}.Amn{n};
+%                     AAsum = AAsum+(AmnTmp.'*AmnTmp);
+%                     LambdanmTmp = node{Nm(n)}.L(k,:,(node{Nm(n)}.N==m)).'; % This is just the real-real lambdas
+%                     AnmTmp = flipud(node{Nm(n)}.Amn{node{Nm(n)}.N==m});                        
+%                     WnTmp = node{Nm(n)}.W(k,:).';
+%                     ALAWsum = ALAWsum + (AmnTmp.'*(LambdanmTmp-AnmTmp*WnTmp));
+%       
+%                     % For Lambda,zk update
+%                     AmnRinv = AmnTmp/squeeze(Rm(k,:,:));
+%                     AARsum = AARsum + (AmnTmp.'*AmnRinv); 
+%                     ALAWARdsum = ALAWARdsum + (AmnTmp.'*(LambdanmTmp-AnmTmp*WnTmp-AmnRinv*dTmp));  
+%                 end
+%                 WRealNew(k,1:Nlen) = (AAsum+squeeze(Rm(k,:,:)))\(ALAWsum+dTmp);
+%                 zk = (AARsum+eye(Nlen))\ALAWARdsum;
+% 
+%                 % Lambda update requires twice around the neighboring nodes:
+%                 % once for finding the summations in zk, and once for Lambda
+%                 % itself.
+%                 for n=1:node{m}.Nlen
+%                     LambdanmTmp = node{Nm(n)}.L(k,:,(node{Nm(n)}.N==m)).';
+%                     AnmTmp = flipud(node{Nm(n)}.Amn{node{Nm(n)}.N==m});
+%                     WnTmp = node{Nm(n)}.W(k,:).';
+%                     AmnTmp = node{m}.Amn{n};  
+%                     LambdaRealNew(k,:,n) = LambdanmTmp-AnmTmp*WnTmp-AmnTmp/squeeze(Rm(k,:,:))*(dTmp+zk);
+%                 end 
+%                 
+%                 % Primal update for virtual node m+M
+%                 WnTmp = Wm(k,:); % Comes from m because m is n for virtual node m+M
+%                 AnmTmp = node{m}.Amn{end};
+%                 LambdanmTmp = node{m}.L(k);
+%             end   
+% 
+%             % Assign new W and L values to node m and m+M
+%             node{m}.W = WRealNew;
+%             node{m}.L = LambdaRealNew;
+%         end
+%     end  
+%     for k=1:Khalf
+%         node{m}.R{k} = squeeze(Rm(k,:,:));
+%     end
+%     
+%     % Generate output using updated primal and dual weights
+%     for m=1:M
+%         Y(:,l) = Y(:,l) + (1/M)*conj(node{m}.W(:,node{m}.N==m)).*node{m}.X(:,node{m}.N==m);
+%         Wsave(:,l,m) = (1/M)*node{m}.W(:,node{m}.N==m);
+% %         Y(:,l) = Y(:,l) + (1/M)*sum(node{m}.W(:,1:end-1).*node{m}.X(:,1:end-1),2); % -1 because the virtual node's weight and observation should not contribute to the output
+%     end     
+% end
 
 %% Calculate BF output
 Y = [zeros(1,L);Y;zeros(2,L);conj(flipud(Y))];
@@ -381,9 +409,19 @@ figure; imagesc(abs(squeeze(Wsave(:,Ltmp,:))))
 
 
 %% 
-WSaveTmp = squeeze(Wsave(49,:,:));
-WOptTmp = squeeze(Wopt(49,:));
+bin=49;
+WSaveTmp = squeeze(Wsave(bin,:,:));
+WOptTmp = squeeze(Wopt(bin,:));
 for l=1:length(WSaveTmp)
     WWoptMSE(l) = mean((WOptTmp-WSaveTmp(l,:))*(WOptTmp-WSaveTmp(l,:))');
 end
 figure ; semilogy(WWoptMSE); grid on; title('WWoptMSE single bin');
+
+%% Variance of the sensor weights
+VarWsave = zeros(M,1);
+VarWopt = zeros(M,1);
+for m=1:M
+    VarWsave(m) = Wsave(:,end,m)'*Wsave(:,end,m);
+    VarWopt(m) = Wopt(:,m)'*Wopt(:,m);
+end
+figure; plot(VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Variance in sensors'); legend('VarWsave','VarWopt');

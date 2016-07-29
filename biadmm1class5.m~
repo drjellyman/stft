@@ -382,8 +382,8 @@ figure; imagesc(abs(squeeze(Wsave(:,Ltmp,:))))
 
 %% 
 WSaveTmp = squeeze(Wsave(49,:,:));
-WOptTmp = squeeze(Wopt(49,:));
+WOptTmp = squeeze(49,:);
 for l=1:length(WSaveTmp)
-    WWoptMSE(l) = mean((WOptTmp-WSaveTmp(l,:))*(WOptTmp-WSaveTmp(l,:))');
+    WWoptMSE(l) = mean((WOptTmp-WSaveTmp)*conj(WOptTmp-WSaveTmp));
 end
-figure ; semilogy(WWoptMSE); grid on; title('WWoptMSE single bin');
+fi
