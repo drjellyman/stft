@@ -49,7 +49,7 @@ fs = 16e3;
 
 % Truncate to desired length, ensuring that the length is a multiple of 
 % the window length.
-K = 2^12+1; % K = window length in samples, and the number of frequency bins
+K = 2^11+1; % K = window length in samples, and the number of frequency bins
 Khalf = (K-1)/2-1;
 tls = 5; % tls = target length in seconds
 tl = tls*fs-mod(tls*fs,K-1)+1; % tl = target length in samples, adjusted for window length and sampling frequency
@@ -64,7 +64,7 @@ for ns=1:Nsrcs
 end
 
 %% Place sensors
-M = 3; % M = number of sensors
+M = 50; % M = number of sensors
 
 % Create nodes
 node = cell(2*M,1);
@@ -72,17 +72,20 @@ for m=1:2*M
     node{m} = myNode;
 end
 
-spSize = 10; % spSize = size of the room (m)
+spSize = 1; % spSize = size of the room (m)
 space = [spSize, spSize, spSize]'; % Dimensions of the space
 spcDim = length(space);
-% Mloc = (rand(M,spcDim)*diag(space)).'; % Mloc = matrix containing 3d sensor locations
+Mloc = (rand(M,spcDim)*diag(space)).'; % Mloc = matrix containing 3d sensor locations
 % sloc = ((rand(Nsrcs,spcDim)*diag(space))).';%+[0,0,2;0,0,2]).'; % sloc = matrix containing 3d source locations
-sloc =   [1,9.2;
-          1,9.2;
-          1,9.2];
-Mloc = [1.1,3,9.1;
-        1.1,4,9.1;
-        1.1,5,9.1];
+sloc =   spSize*[0.1,0.92;
+                0.1,0.92;
+                0.1,0.92];
+% Mloc = spSize*[0.11,0.3,0.91;
+%         0.11,0.4,0.91;
+%         0.11,0.5,0.91];
+Mloc(:,1:3) = spSize*[0.11,0.3,0.91;
+                      0.11,0.4,0.91;
+                      0.11,0.5,0.91];
     
 % Set location for each node
 for m=1:M
@@ -123,6 +126,12 @@ for m=1:M
     XTmp = stft(xPadded,K);
     X(:,:,m) = XTmp(2:(K-1)/2,:);
 end
+
+%% 
+Xcheck = squeeze(X(:,:,1));
+Xcheck = [zeros(1,L);Xcheck;zeros(2,L);conj(flipud(Xcheck))];
+xcheck = myOverlapAdd(Xcheck);
+
 
 %% Calculate covariances over all time
 % R = cell(Khalf,1);
@@ -183,7 +192,7 @@ for k=1:Khalf
         R = R + (1/(L*Khalf))*(Xtmp*Xtmp');
     end
 end
-R = R + 1*eye(3);
+R = R + 1*eye(M);
 rcond(R)
 
 %% Initialization
@@ -205,7 +214,7 @@ for m=1:M
     node{m}.Amn = Amn;
    
     % Save look direction d for node m
-    node{m}.d = exp(-1i*2*pi*fdomShort.'*ssd(1,m)/c) ;%/ (4*pi*ssd(1,m));
+    node{m}.d = exp(-1i*2*pi*fdomShort.'*ssd(1,m)/c) / (4*pi*ssd(1,m));
     
 %     % Initialize R
 %     for k=1:Khalf
@@ -220,7 +229,7 @@ end
 Y = zeros(Khalf,L);
 
 %% Adaptive algorithm (new based on biadmm_1bin2.m)
-Ltmp = 10; % For shorter run times
+Ltmp = L; % For shorter run times
 ITER1 = 1;
 ITER2 = 1;
 Wsave = zeros(Khalf,Ltmp,M);
@@ -262,9 +271,22 @@ for l=1:Ltmp
                     end
                 end
             end
-            Wsave(k,l,:) = [node{1}.W(k,1),node{2}.W(k,2),node{3}.W(k,3)];
+            % option 1, use each node's single vector of weights relating
+            % to itself
+            Wtmp = zeros(M,1);
+            for m=1:M
+                Wtmp(m) = node{m}.W(k,m);
+            end
+            Wsave(k,l,:) = Wtmp;
+
+            % option 2, average all weights in the network relating to a
+            % particular node, right now it's fully connected
+%             Wsave(k,l,:) = mean([node{1}.W(k,:);node{2}.W(k,:);node{3}.W(k,:)]);
+            
+            
         end
     end
+    Y(:,l) = (1/M)*sum(squeeze(conj(Wsave(:,l,:))).*squeeze(X(:,l,:)),2);
 end
 
 %% Iterative update (old)
@@ -403,10 +425,27 @@ end
 figure; plot((WWoptMSE)); grid on;
 
 %% Let's have a look at W and Wopt
+% W = squeeze(Wsave(:,Ltmp,:));
+% % WoptMean = mean(mean(abs(Wopt)))
+% % WoptVar = var(var(abs(Wopt)))
+% % WMean = mean(mean(abs(W)))
+% % WVar = var(var(abs(W)))
+% % WScaled = W * WoptMean/WMean;
+% % WScaledMean = mean(mean(abs(WScaled)))
+% % WScaledVar = var(var(abs(WScaled)))
+% 
+% Wmax = max(max(abs(W)))
+% Wmin = min(min(abs(W)))
+% Woptmax = max(max(abs(Wopt)))
+% Woptmin = min(min(abs(Wopt)))
+% Wscaled = W * Woptmax/Wmax;
+% figure; imagesc(abs(Wopt))
+% figure; imagesc(abs(Wscaled))
+% Wscaledmax = max(max(abs(Wscaled)))
+
+%% 
 figure; imagesc(abs(Wopt))
 figure; imagesc(abs(squeeze(Wsave(:,Ltmp,:))))
-
-
 
 %% 
 bin=49;
@@ -421,7 +460,12 @@ figure ; semilogy(WWoptMSE); grid on; title('WWoptMSE single bin');
 VarWsave = zeros(M,1);
 VarWopt = zeros(M,1);
 for m=1:M
-    VarWsave(m) = Wsave(:,end,m)'*Wsave(:,end,m);
+    VarWsave(m) = Wsave(:,2,m)'*Wsave(:,2,m);
     VarWopt(m) = Wopt(:,m)'*Wopt(:,m);
 end
 figure; plot(VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Variance in sensors'); legend('VarWsave','VarWopt');
+
+%% Print setup for records
+fprintf('Nsrcs = %d, K = %d, tls = %d, M = %d, spSize = %d, bin = %d, Ltmp = %d\n\n',Nsrcs,K,tls,M,spSize,bin,Ltmp);
+
+
