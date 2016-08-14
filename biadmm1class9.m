@@ -1,6 +1,6 @@
 %% Start again mvdr beamformer, hopefully distributed using biadmm. 
 
-% History
+% % % History % % %
 
 % biadmm1class6.m is a working realnodeonly version. It has issues though,
 % for example, Wopt is worse than listening to the very close microphone.
@@ -8,6 +8,12 @@
 
 % biadmm1class7.m uses the spatial covariance only for the first time,
 % hopefully that clears up a few issues with W and Wopt.
+
+% biadmm1class8.m uses the setup from 'on simplifying pdmm...' zhang,
+% specifically in the setup of the Aij matrices and the use of uij for
+% setting the sign. 
+
+% biadmm1class9.m is just a tidy up for showing Aryan
 
 close all; clear;
 
@@ -24,7 +30,7 @@ fs = 16e3;
 % the window length.
 K = 2^12+1; % K = window length in samples, and the number of frequency bins
 Khalf = (K-1)/2-1;
-tls = 10; % tls = target length in seconds
+tls = 5; % tls = target length in seconds
 tl = tls*fs-mod(tls*fs,K-1)+1; % tl = target length in samples, adjusted for window length and sampling frequency
 for ns=1:Nsrcs
     s{ns} = s{ns}(1:tl);
@@ -38,7 +44,7 @@ for ns=1:Nsrcs
 end
 
 %% Place sensors
-M = 2; % M = number of sensors
+M = 3; % M = number of sensors
 
 % Create nodes
 node = cell(M,1); % 2*M
@@ -46,7 +52,7 @@ for m=1:M%2*M
     node{m} = myNode;
 end
 
-spSize = 5; % spSize = size of the room (m)
+spSize = 1; % spSize = size of the room (m)
 space = [spSize, spSize, spSize]'; % Dimensions of the space
 spcDim = length(space);
 % xloc = (rand(M,spcDim)*diag(space)).'; % xloc = matrix containing 3d sensor locations
@@ -57,12 +63,9 @@ spcDim = length(space);
 sloc =   spSize*[0.1;
                 0.1;
                 0.1];
-% xloc(:,1:3) = spSize*[0.11,0.3,0.91;
-%                       0.11,0.4,0.91;
-%                       0.11,0.5,0.91];
-xloc = spSize*[0.11,0.3;
-                      0.11,0.4;
-                      0.11,0.5];
+xloc(:,1:3) = spSize*[0.11,0.3,0.91;
+                      0.11,0.4,0.91;
+                      0.11,0.5,0.91];
     
 % Set location for each node
 for m=1:M
@@ -73,7 +76,7 @@ end
 ssd = myGetDist(xloc,sloc);
 
 %% Display layout
-% myDisplayLayout(xloc,sloc);
+myDisplayLayout(xloc,sloc);
 
 %% Create ATFs and observations for full fft version
 fdom = (fs/(tl-1)) * (1:(tl-1)/2-1);
@@ -88,45 +91,12 @@ for m=1:M
         Xfft = Xfft + (A .* S{ns});
     end
     Xfft = [0;Xfft;0;0;conj(flipud(Xfft))];
-    x = ifft(Xfft) + 0.001*randn(tl,1);
+    x = ifft(Xfft) + 0.0001*randn(tl,1);
     xsave(:,m) = x;
     xPadded = [zeros((K-1)/2,1);x(1:end-1);zeros((K-1)/2,1)];
     XTmp = stft(xPadded,K);
     X(:,:,m) = XTmp(2:(K-1)/2,:);
 end
-
-%% Calculate covariances over all time
-% R = cell(Khalf,1);
-% for k=1:Khalf
-%     for l=1:L
-%         if l==1
-%             R{k} = zeros(M);
-%         end
-%         R{k} = R{k} + (1/L)*squeeze(X(k,l,:))*squeeze(X(k,l,:))';
-%     end
-% end
-
-%% Calculate covariances over all time
-% R = cell(Khalf,1);
-% for k=1:Khalf
-%     for l=1:L
-%         if l==1
-%             R{k} = zeros(M);
-%         end
-%         XTmp = squeeze(X(k,l,:));
-%         R{k} = R{k} + (1/L)*(XTmp*XTmp');
-%     end
-% end
-%
-% RR = xsave'*xsave;
-% RRcondition = rcond(RR)
-% figure; imagesc(abs(RR));
-% 
-% RSum = zeros(M);
-% for k=1:Khalf
-%     RSum = RSum + R{k}; % RSum is the covariance summed over time and frequency bins
-% end
-% figure; imagesc(abs(RSum));
 
 %% Find sensor to sensor distances
 sensd = myFindSensDist(xloc);
@@ -139,17 +109,6 @@ for m=1:M
     Nneighbors(m) = node{m}.Nlen;    
 end
 fprintf('The minimum number of neighbors was %d. \nThe mean number of neighbors was %d. \n\n',min(Nneighbors),mean(Nneighbors));
-
-%% Covariance
-% R = zeros(M);
-% for k=1:Khalf
-%     for l=1:L
-%         Xtmp = squeeze(X(k,l,:));
-%         R = R + (1/(L*Khalf))*(Xtmp*Xtmp');
-%     end
-% end
-% R = R + 1*eye(M);
-% rcond(R)
 
 %% Covariance based only on sensor and source location
 fdomShort = (fs/(K-1)) * (1:((K-1)/2)-1);
@@ -168,16 +127,16 @@ end
 %% Initialization
 for m=1:M
     % Initialize Lambdas and weights
-    node{m}.L = zeros(Khalf,2,node{m}.Nlen); % These are for node m's real neighbors including itself
+    node{m}.L = ones(Khalf,2,node{m}.Nlen); % These are for node m's real neighbors including itself
     node{m}.W = ones(Khalf,node{m}.Nlen); % Note that this includes node m itself, node m's real neighbors, and node m's virtual neighbor (m+M)
-    
+ 
     % Initialize Amn for all nodes
     Amn = cell(node{m}.Nlen,1); 
     for n = 1:node{m}.Nlen
         if m==node{m}.N(n)
             Amn{n} = zeros(2,node{m}.Nlen);
         else
-            Amn{n} = [(node{m}.N==m).';-(node{m}.N==node{m}.N(n)).'];
+            Amn{n} = double([(node{m}.N==m).';-(node{m}.N==node{m}.N(n)).']);
         end
     end
     node{m}.Amn = Amn;
@@ -211,97 +170,69 @@ Yopt = [zeros(1,L);Yopt;zeros(2,L);conj(flipud(Yopt))];
 yopt = myOverlapAdd(Yopt);
 
 %% Adaptive algorithm (new based on biadmm_1bin2.m)
-Ltmp = 10; % For shorter run times
-Wsave = zeros(Khalf,Ltmp,M);
-for m=1:M
-    node{m}.W = Wopt;     
-end
-% for l=1:Ltmp
-%     Wsave(:,l,:) = Wopt;
-% end
+Ltmp = 20; % For shorter run times
 bin = 53;
 ITER1 = 1;
 ITER2 = 1;
-Lsave = zeros(Khalf,M,2,2); % k x m x 2 x n
-WsaveShort = zeros(Khalf,M,M);
+Wsave = zeros(Khalf,Ltmp,M);
+
+% Initialize W to Wopt
+for m=1:M
+    node{m}.W = Wopt;     
+end
+
+% % Store Wopt in Wsave (for single freq bin opt)
+% for l=1:Ltmp
+%     Wsave(:,l,:) = Wopt;
+% end
+
 for l=1:Ltmp
     for iter1=1:ITER1
         for k=1:Khalf
             for m=1:M
                 for iter2=1:ITER2
-                    [l,iter1,k,m,iter2]
+                    [l,k,m]
                     Nlen = node{m}.Nlen;
-                    AApR = zeros(Nlen);
                     AA = zeros(Nlen);
                     ALAW = zeros(Nlen,1);
-                    ALAWD = zeros(Nlen,1);
-                    AARpI = zeros(Nlen);
-                    ALAWARD = zeros(Nlen,1);
                     dm = zeros(Nlen,1);
                     dm(m) = node{m}.d(k);
 
+                    % W update
                     for n=1:Nlen
                         Amn = node{m}.Amn{n};
-%                         AApR = AApR + (Amn.'*Amn+squeeze(R(k,:,:)));
                         AA = AA + (Amn.'*Amn);
                         Lnm = node{node{m}.N(n)}.L(k,:,node{node{m}.N(n)}.N==m).';
                         Anm = flipud(node{node{m}.N(n)}.Amn{node{node{m}.N(n)}.N==m});
                         Wn = node{node{m}.N(n)}.W(k,:).';
-%                         ALAWD = ALAWD + (Amn.'*(Lnm-Anm*Wn)+dm);
                         ALAW = ALAW + (Amn.'*(Lnm-Anm*Wn));
-%                         AARpI = AARpI + (Amn.'*Amn/squeeze(R(k,:,:))+eye(Nlen));
-%                         ALAWARD = ALAWARD + (Amn.'*(Lnm-Anm*Wn-Amn/squeeze(R(k,:,:))*dm));
-                        
                     end
-%                     zm = AARpI\ALAWARD;
-                    AApR = AA + squeeze(R(k,:,:));
-                    ALAWD = ALAW + dm;
-%                     WsaveShort(k,m,:) = AApR\ALAWD;
-                    node{m}.W(k,:) = AApR\ALAWD;
+                    node{m}.W(k,:) = (AA + squeeze(R(k,:,:)))\(ALAW + dm);
                     
-                    % Simplified Lambda update from eqn (12) Biadmm over
-                    % graphs
+                    % Lambda update
                     for n=1:Nlen
-                        % Watch out for this when not fully connected
                         Amn = node{m}.Amn{n};
                         Anm = flipud(node{node{m}.N(n)}.Amn{node{node{m}.N(n)}.N==m});
                         Wn = node{node{m}.N(n)}.W(k,:).';
                         Wm = node{m}.W(k,:).';
-%                         Wm = squeeze(WsaveShort(k,m,:));
-%                         Lsave(k,m,n,:) = node{n}.L(k,:,m).' - Anm*Wn - Amn*Wm;
-                        node{m}.L(k,:,n) = node{n}.L(k,:,m).' - Anm*Wn - Amn*Wm;
+                        node{m}.L(k,:,n) = node{n}.L(k,:,m).' - 0.7*(Anm*Wn + Amn*Wm);
                     end
-                    
-%                     % Lambda update as in Matt's paper
-%                     for n=1:Nlen
-%                         Lnm = node{node{m}.N(n)}.L(k,:,node{node{m}.N(n)}.N==m).';
-%                         Anm = flipud(node{node{m}.N(n)}.Amn{node{node{m}.N(n)}.N==m});
-%                         Wn = node{node{m}.N(n)}.W(k,:).';
-%                         Amn = node{m}.Amn{n};
-%                         dm = zeros(Nlen,1);
-%                         dm(m) = node{m}.d(k);
-%                         node{m}.L(k,:,n) = Lnm-Anm*Wn-Amn/squeeze(R(k,:,:))*(dm+zm);
-%                     end
                 end
             end
-%             for m=1:M
-%                 node{m}.L(k,:,:) = Lsave(k,m,:,:);% kx2xn
-%                 node{m}.W(k,:) = WsaveShort(k,m,:);
-%             end
-            % option 1, use each node's single vector of weights relating
-            % to itself
-            Wtmp = zeros(M,1);
-            for m=1:M
-                Wtmp(m) = node{m}.W(k,m);
-            end
-            Wsave(k,l,:) = Wtmp;
-
-            % option 2, average all weights in the network relating to a
-            % particular node, right now it's fully connected
-%             Wsave(k,l,:) = mean([node{1}.W(k,:);node{2}.W(k,:);node{3}.W(k,:)]);            
         end
+        
+        % Save the current weights 
+        Wtmp = zeros(Khalf,M);
+        for m=1:M
+            Wtmp(:,m) = node{m}.W(:,node{m}.N==m);
+        end          
+        Wsave(:,l,:) = Wtmp;
+        
     end
+    
+    % Calculate output Y
     Y(:,l) = (1/M)*sum(squeeze(conj(Wsave(:,l,:))).*squeeze(X(:,l,:)),2);
+    
 end
 
 
@@ -315,7 +246,6 @@ WWoptMSE = zeros(Ltmp,1);
 for l=1:Ltmp
     Wtmp = squeeze(Wsave(:,l,:));
     WWoptMSE(l) = mean(mean((Wtmp-Wopt).*conj(Wtmp-Wopt)));
-%     WWoptMSE(l) = mean(mean((squeeze(Wsave(:,l,:))-Wopt).^2));
 end
 figure; semilogy(WWoptMSE); grid on; title('WWoptMSE');
 
@@ -327,7 +257,7 @@ figure; imagesc(abs(squeeze(Wsave(:,Ltmp,:))));title('Wsave');
 % figure; imagesc(abs(squeeze(Wopt(bin,:)))); title('Wopt');
 % figure; imagesc(abs(squeeze(Wsave(bin,Ltmp,:)).'));title('Wsave');
 
-%% Check convergence of W
+%% MSE between W and Wopt single bin
 WSaveTmp = squeeze(Wsave(bin,:,:));
 WOptTmp = squeeze(Wopt(bin,:));
 LL = length(WSaveTmp);
@@ -351,7 +281,7 @@ figure; plot(VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Vari
 
 
 %% Print setup for records
-% fprintf('Nsrcs = %d, K = %d, tls = %d, M = %d, spSize = %d, bin = %d, Ltmp = %d\n\n',Nsrcs,K,tls,M,spSize,bin,Ltmp);
+fprintf('Nsrcs = %d, K = %d, tls = %d, M = %d, spSize = %d, bin = %d, Ltmp = %d\n\n',Nsrcs,K,tls,M,spSize,bin,Ltmp);
 
 %%
 % Wopt(54,1)'*node{1}.d(54)+Wopt(54,2)'*node{2}.d(54)

@@ -64,7 +64,7 @@ for ns=1:Nsrcs
 end
 
 %% Place sensors
-M = 50; % M = number of sensors
+M = 3; % M = number of sensors
 
 % Create nodes
 node = cell(2*M,1);
@@ -229,7 +229,7 @@ end
 Y = zeros(Khalf,L);
 
 %% Adaptive algorithm (new based on biadmm_1bin2.m)
-Ltmp = L; % For shorter run times
+Ltmp = 10; % For shorter run times
 ITER1 = 1;
 ITER2 = 1;
 Wsave = zeros(Khalf,Ltmp,M);

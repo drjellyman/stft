@@ -5,7 +5,9 @@ classdef myNode
     properties
         loc         % 3d location of node
         W           % Local weights matrix
+        Wnew
         L           % Local Lambda dual weight matrix
+        Lnew
         R           % Observation covariance
         d           % Look direction vector
         N           % Neighbor ids
