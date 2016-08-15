@@ -15,16 +15,10 @@
 
 % biadmm1class9.m is just a tidy up for showing Aryan
 
-% pdmm_ls.m is a working pdmm for least squares with guaranteed convergence
-% to the optimum.
-
-% biadmm1class10.m is working pdmm - note that it cannot guarantee
-% convergece to Wopt 
-
 close all; clear;
 
 % Import target audio
-Nsrcs = 2; % Nsrcs = number of sources
+Nsrcs = 1; % Nsrcs = number of sources
 s = cell(Nsrcs,1);
 AudioFileNames = {'422-122949-0013.flac';'2078-142845-0005.flac'};
 for ns=1:Nsrcs
@@ -34,7 +28,7 @@ fs = 16e3;
 
 % Truncate to desired length, ensuring that the length is a multiple of 
 % the window length.
-K = 2^9+1; % K = window length in samples, and the number of frequency bins
+K = 2^12+1; % K = window length in samples, and the number of frequency bins
 Khalf = (K-1)/2-1;
 tls = 5; % tls = target length in seconds
 tl = tls*fs-mod(tls*fs,K-1)+1; % tl = target length in samples, adjusted for window length and sampling frequency
@@ -61,17 +55,17 @@ end
 spSize = 1; % spSize = size of the room (m)
 space = [spSize, spSize, spSize]'; % Dimensions of the space
 spcDim = length(space);
-xloc = (rand(M,spcDim)*diag(space)).'; % xloc = matrix containing 3d sensor locations
-sloc = ((rand(Nsrcs,spcDim)*diag(space))).';%+[0,0,2;0,0,2]).'; % sloc = matrix containing 3d source locations
+% xloc = (rand(M,spcDim)*diag(space)).'; % xloc = matrix containing 3d sensor locations
+% sloc = ((rand(Nsrcs,spcDim)*diag(space))).';%+[0,0,2;0,0,2]).'; % sloc = matrix containing 3d source locations
 % sloc =   spSize*[0.1,0.92;
 %                 0.1,0.92;
 %                 0.1,0.92];
-% sloc =   spSize*[0.1;
-%                 0.1;
-%                 0.1];
-% xloc(:,1:3) = spSize*[0.11,0.3,0.91;
-%                       0.11,0.4,0.91;
-%                       0.11,0.5,0.91];
+sloc =   spSize*[0.1;
+                0.1;
+                0.1];
+xloc(:,1:3) = spSize*[0.11,0.3,0.91;
+                      0.11,0.4,0.91;
+                      0.11,0.5,0.91];
 % xloc = spSize*[0.2,0.1,0.1;
 %                 0.1,0.2,0.1;
 %                 0.1,0.1,0.2];
@@ -85,7 +79,7 @@ end
 ssd = myGetDist(xloc,sloc);
 
 %% Display layout
-myDisplayLayout(xloc,sloc);
+% myDisplayLayout(xloc,sloc);
 
 %% Create ATFs and observations for full fft version
 fdom = (fs/(tl-1)) * (1:(tl-1)/2-1);
@@ -166,30 +160,30 @@ end
 Y = zeros(Khalf,L);
 
 %% A1) Frequency domain Frost optimum weights
-d = zeros(Khalf,M);
-for m=1:M
-    d(:,m) = node{m}.d;
-end
-Wopt = zeros(Khalf,M);
-dk = zeros(Khalf,M);
-for k=1:Khalf
-    dk = d(k,:).';
-    Wopt(k,:) = (squeeze(R(k,:,:))\dk)/(dk'/squeeze(R(k,:,:))*dk); 
-end
-
-% Find output using optimum weights
-Yopt = zeros(Khalf,L);
-for l=1:L
-    Xtmp = squeeze(X(:,l,:));
-    Yopt(:,l) = sum(conj(Wopt).*Xtmp,2);
-end
-Yopt = [zeros(1,L);Yopt;zeros(2,L);conj(flipud(Yopt))];
-yopt = myOverlapAdd(Yopt);
+% d = zeros(Khalf,M);
+% for m=1:M
+%     d(:,m) = node{m}.d;
+% end
+% Wopt = zeros(Khalf,M);
+% dk = zeros(Khalf,M);
+% for k=1:Khalf
+%     dk = d(k,:).';
+%     Wopt(k,:) = (squeeze(R(k,:,:))\dk)/(dk'/squeeze(R(k,:,:))*dk); 
+% end
+% 
+% % Find output using optimum weights
+% Yopt = zeros(Khalf,L);
+% for l=1:L
+%     Xtmp = squeeze(X(:,l,:));
+%     Yopt(:,l) = sum(conj(Wopt).*Xtmp,2);
+% end
+% Yopt = [zeros(1,L);Yopt;zeros(2,L);conj(flipud(Yopt))];
+% yopt = myOverlapAdd(Yopt);
 
 %% Adaptive algorithm (new based on biadmm_1bin2.m)
 % Ltmp = L; % For shorter run times
 bin = 53;
-ITER1 = 20;
+ITER1 = 1000;
 ITER2 = 1;
 % Wsave = zeros(Khalf,ITER1,M);
 
@@ -204,14 +198,14 @@ ITER2 = 1;
 % end
 
 ftmp = zeros(ITER1,M);
-rho = 1.3; % scaling for consensus
-alpha = 1; % scaling for lambda consensus
-% B = randn(M);
-% b = randn(M,1);
-% Wopt = inv(B)*b;
+rho = 1; % scaling for consensus
+alpha = 0.9; % scaling for lambda consensus
+B = randn(M);
+b = randn(M,1);
+Wopt = inv(B)*b;
 for l=1
     for iter1=1:ITER1
-        for k=1:Khalf
+        for k=bin%1:Khalf
             for m=1:M
                 for iter2=1:ITER2
                     [iter1,k,m]
@@ -232,8 +226,8 @@ for l=1
                         ALAW = ALAW + (Amn.'*(Lnm-Anm*Wn));
                     end
 %                     node{m}.W(k,:) = (AA + squeeze(R(k,:,:)))\(ALAW + dm);
-                    node{m}.Wnew(k,:) = (rho*AA + squeeze(R(k,:,:)))\(ALAW + dm);
-%                     node{m}.Wnew(k,:) = (AA+B(m,:).'*B(m,:))\(ALAW+B(m,:).'*b(m));
+%                     node{m}.Wnew(k,:) = (rho*AA + squeeze(R(k,:,:)))\(ALAW + dm);
+                    node{m}.Wnew(k,:) = (AA+B(m,:).'*B(m,:))\(ALAW+B(m,:).'*b(m));
 %                     
                     
                     % Lambda update
@@ -275,7 +269,6 @@ for l=1
             
             WsaveAll(iter1,m,:) = node{m}.W(k,:);
             LsaveAll(iter1,m,:,:) = node{m}.L(k,:,:);
-            
         end
 %         Wsave(:,iter1,:) = Wtmp;            
     end
@@ -287,14 +280,9 @@ end
 
 
 %% Calculate BF output
-W = mean(cat(3,node{1}.W,node{2}.W,node{3}.W),3);
-
-for l=1:L
-    Y(:,l) = (1/M)*sum(squeeze(conj(W)).*squeeze(X(:,l,:)),2);
-end
-Y = [zeros(1,L);Y;zeros(2,L);conj(flipud(Y))];
-y = myOverlapAdd(Y);
-figure; plot(y);
+% Y = [zeros(1,L);Y;zeros(2,L);conj(flipud(Y))];
+% y = myOverlapAdd(Y);
+% figure; plot(y);
 
 %% MSE between W and Wopt
 % a = length(Wsave(1,:,1))
@@ -306,8 +294,8 @@ figure; plot(y);
 % figure; semilogy(WWoptMSE); grid on; title('WWoptMSE');
 
 %% W vs Wopt full spectrum
-figure; imagesc(abs(Wopt)); title('Wopt');
-figure; imagesc(abs(squeeze(W)));title('W');
+% figure; imagesc(abs(Wopt)); title('Wopt');
+% figure; imagesc(abs(squeeze(Wsave(:,Ltmp,:))));title('Wsave');
 
 %% W vs Wopt single bin
 % figure; imagesc(abs(squeeze(Wopt(bin,:)))); title('Wopt');
@@ -355,14 +343,12 @@ figure; imagesc(abs(squeeze(W)));title('W');
 xi_xiopt_norm = zeros(ITER1,M);
 for iter1=1:ITER1
     for m=1:M
-        xi_xiopt_norm(iter1,m) = norm(squeeze(WsaveAll(iter1,m,:)) - squeeze(Wopt(bin,:)).');
-%         xi_xiopt_norm(iter1,m) = norm(squeeze(WsaveAll(iter1,m,:)) - (Wopt));
+%         xi_xiopt_norm(iter1,m) = norm(squeeze(WsaveAll(iter1,m,:)) - squeeze(Wopt(bin,:)).');
+        xi_xiopt_norm(iter1,m) = norm(squeeze(WsaveAll(iter1,m,:)) - (Wopt));
     end
 end
-% figure; semilogy(xi_xiopt_norm(:,1), '.--'); hold on; semilogy(xi_xiopt_norm(:,2),'.--'); 
-% semilogy(xi_xiopt_norm(:,3),'.--'); grid on; legend('node 1','node 2','node 3'); title('norm(xi-xopt) for i=1,2,3, single bin');
-figure; plot(xi_xiopt_norm(:,1), '.--'); hold on; plot(xi_xiopt_norm(:,2),'.--'); 
-plot(xi_xiopt_norm(:,3),'.--'); grid on; legend('node 1','node 2','node 3'); title('norm(xi-xopt) for i=1,2,3, single bin');
+figure; semilogy(xi_xiopt_norm(:,1), '.--'); hold on; semilogy(xi_xiopt_norm(:,2),'.--'); 
+semilogy(xi_xiopt_norm(:,3),'.--'); grid on; legend('node 1','node 2','node 3'); title('norm(xi-xopt) for i=1,2,3, single bin');
 
 
 % Find ||x1-x2|| + ||x1-x3|| + ||x2-x3|| = 0 
@@ -373,9 +359,7 @@ x3 = squeeze(WsaveAll(:,3,:));
 for iter1=1:ITER1
     xNormSum(iter1) = norm(x1(iter1,:)-x2(iter1,:)) + norm(x1(iter1,:)-x3(iter1,:)) + norm(x2(iter1,:)-x3(iter1,:));
 end
-% figure; semilogy(xNormSum); grid on; title('norm(x1-x2)+norm(x1-x3)+norm(x2-x3), single bin');
-figure; plot(xNormSum); grid on; title('norm(x1-x2)+norm(x1-x3)+norm(x2-x3), single bin');
-
+figure; semilogy(xNormSum); grid on; title('norm(x1-x2)+norm(x1-x3)+norm(x2-x3), single bin');
 fprintf('\nfinal norm(x1-x2)+norm(x1-x3)+norm(x2-x3) = %d\n',xNormSum(end));
 
 %%
@@ -386,4 +370,4 @@ for m=1:M
         plot((abs(LsaveAll(:,m,1,n)))); 
     end
 end
-grid on; legend('11','12','13','21','22','23','31','32','33'); title('Lambda values');
+grid on; legend('11','12','13','21','22','23','31','32','33')
