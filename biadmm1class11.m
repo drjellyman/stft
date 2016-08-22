@@ -19,7 +19,10 @@
 % to the optimum.
 
 % biadmm1class10.m is working pdmm - note that it cannot guarantee
-% convergece to Wopt 
+% convergece to Wopt, but it sounds great and the weights are only a factor
+% out
+
+% biadmm1class11.m attempts to add sparsity to pdmm.
 
 close all; clear;
 
@@ -50,11 +53,11 @@ for ns=1:Nsrcs
 end
 
 %% Place sensors
-M = 3; % M = number of sensors
+M = 3; % M = number of sensors (note that the number of nodes will be 2*M to include virtual nodes)
 
 % Create nodes
-node = cell(M,1); % 2*M
-for m=1:M%2*M
+node = cell(2*M,1); % 
+for m=1:2*M
     node{m} = myNode;
 end
 
@@ -79,10 +82,12 @@ sloc = ((rand(Nsrcs,spcDim)*diag(space))).';%+[0,0,2;0,0,2]).'; % sloc = matrix 
 % Set location for each node
 for m=1:M
     node{m}.loc = xloc(:,m);
+    node{m+M}.loc = xloc(:,m); % I've given the virtual node a location so it doesn't feel like less of a node
 end
 
 % Calculate distances
 ssd = myGetDist(xloc,sloc);
+[dontcare,nearestSensor] = min(ssd(1,:));
 
 %% Display layout
 myDisplayLayout(xloc,sloc);
@@ -113,9 +118,13 @@ sensd = myFindSensDist(xloc);
 %% Find neighbors, everyone within 0.5*spSize (Aiming for >5 neighbors each, but depends on the number of nodes as well)
 Nneighbors = zeros(M,1);
 for m=1:M
-    node{m}.N = [find(sensd(:,m)<2*spSize) ];
+    node{m}.N = [find(sensd(:,m)<2*spSize) ; m+M]; % m+M is the virtual node for node m. Note that the scheme for listing neighbors is smallest number to largest, which means that the virtual node is always last in the neighbor list. It also means the self connection, i.e. where node m sits in node{m}.N can be anywhere except last.
     node{m}.Nlen = length(node{m}.N);
     Nneighbors(m) = node{m}.Nlen;    
+    
+    % Virtual node
+    node{m+M}.N = [m,m+M];
+    node{m+M}.Nlen = 2;
 end
 fprintf('The minimum number of neighbors was %d. \nThe mean number of neighbors was %d. \n\n',min(Nneighbors),mean(Nneighbors));
 
@@ -135,29 +144,36 @@ end
 
 %% Initialization
 for m=1:M
-    % Initialize Lambdas and weights
-    node{m}.L = zeros(Khalf,2,node{m}.Nlen); % These are for node m's real neighbors including itself
-    node{m}.W = zeros(Khalf,node{m}.Nlen); % Note that this includes node m itself, node m's real neighbors, and node m's virtual neighbor (m+M)
-    node{m}.Lnew = zeros(Khalf,2,node{m}.Nlen);
-    node{m}.Wnew = zeros(Khalf,node{m}.Nlen);
+    % Initialize Lambdas and weights for real nodes
+    node{m}.L = zeros(Khalf,2,node{m}.Nlen-1); % These are for node m's real neighbors including itself
+    node{m}.W = zeros(Khalf,node{m}.Nlen-1); % Note that this includes node m itself, node m's real neighbors, and node m's virtual neighbor (m+M)
+    node{m}.Lnew = zeros(Khalf,2,node{m}.Nlen-1);
+    node{m}.Wnew = zeros(Khalf,node{m}.Nlen-1);
     
-    % Initialize Amn for all nodes
+    % Initialize Lambdas and Weights for virtual nodes
+    node{m+M}.L = zeros(Khalf,1); 
+    node{m+M}.W = zeros(Khalf,1); % Note that this includes node m itself, node m's real neighbors, and node m's virtual neighbor (m+M)
+    node{m+M}.Lnew = zeros(Khalf,1);
+    node{m+M}.Wnew = zeros(Khalf,1);
+    
+    % Initialize Amn for real nodes
     Amn = cell(node{m}.Nlen,1); 
-    for n = m:node{m}.Nlen
+    % THIS LOOP MAY NOT WORK WHEN THE NETWORK IS NOT FULLY CONNECTED % 
+    for n = m:node{m}.Nlen-1 % Note that this loop starts from m
         if m==node{m}.N(n)
-%             Amn{n} = zeros(2,node{m}.Nlen);
-            node{m}.Amn{n} = zeros(2,node{m}.Nlen);
+            node{m}.Amn{n} = zeros(2,node{m}.Nlen-1);
         else
-%             Amn{n} = double([(node{m}.N==m).';(node{m}.N==node{m}.N(n)).']);
             node{m}.Amn{n} = double([(node{m}.N==m).';(node{m}.N==node{m}.N(n)).']);
-            node{m}.Amn{n}
-            node{node{m}.N(n)}.Amn{m} = -node{m}.Amn{n};
-            node{m}.N(n)
-            node{node{m}.N(n)}.Amn{m}
+            node{m}.Amn{n} = node{m}.Amn{n}(:,1:end-1);
+            node{node{m}.N(n)}.Amn{m} = -node{m}.Amn{n}; % This line only works for fully connected ordered graph
         end
     end
-%     node{m}.Amn = Amn;
-   
+        
+    % Initialize Amn for virtual nodes
+    node{m}.Amn{node{m}.Nlen} = double(node{m}.N==m).';
+    node{m}.Amn{node{m}.Nlen} = node{m}.Amn{node{m}.Nlen}(1:end-1);
+    node{m+M}.Amn{1} = -1;
+  
     % Save look direction d for node m
     node{m}.d = exp(-1i*2*pi*fdomShort.'*ssd(1,m)/c) / (4*pi*ssd(1,m));
 end
@@ -191,24 +207,27 @@ yopt = myOverlapAdd(Yopt);
 bin = 53;
 ITER1 = 20;
 ITER2 = 1;
-% Wsave = zeros(Khalf,ITER1,M);
 
 % % Initialize W to Wopt
 % for m=1:M
 %     node{m}.W = Wopt;     
 % end
 
-% % Store Wopt in Wsave (for single freq bin opt)
-% for iter1=1:ITER1
-%     Wsave(:,iter1,:) = Wopt;
-% end
-
-ftmp = zeros(ITER1,M);
+% ftmp = zeros(ITER1,M);
 rho = 1.3; % scaling for consensus
-alpha = 1; % scaling for lambda consensus
+beta = 1; % scaling for lambda consensus
+alpha = 1; % scaling for regularization
+
+% Check pdmm using ||Bx-b||^2
 % B = randn(M);
 % b = randn(M,1);
 % Wopt = inv(B)*b;
+
+WsaveAll = zeros(ITER1,Khalf,M,M);
+LsaveAll = zeros(ITER1,Khalf,2,M+1,M+1);
+WsaveAllVirt = zeros(ITER1,Khalf,M);
+LsaveAllVirt = zeros(ITER1,Khalf,M);
+
 for l=1
     for iter1=1:ITER1
         for k=1:Khalf
@@ -216,9 +235,9 @@ for l=1
                 for iter2=1:ITER2
                     [iter1,k,m]
                     Nlen = node{m}.Nlen;
-                    AA = zeros(Nlen);
-                    ALAW = zeros(Nlen,1);
-                    dm = zeros(Nlen,1);
+                    AA = zeros(Nlen-1);
+                    ALAW = zeros(Nlen-1,1);
+                    dm = zeros(Nlen-1,1);
                     dm(m) = node{m}.d(k);
 
                     % W update
@@ -226,75 +245,76 @@ for l=1
                         Amn = node{m}.Amn{n};
                         AA = AA + (Amn.'*Amn);
                         Lnm = node{node{m}.N(n)}.L(k,:,node{node{m}.N(n)}.N==m).';
-%                         Anm = flipud(node{node{m}.N(n)}.Amn{node{node{m}.N(n)}.N==m});
                         Anm = node{node{m}.N(n)}.Amn{node{node{m}.N(n)}.N==m};
                         Wn = node{node{m}.N(n)}.W(k,:).';
                         ALAW = ALAW + (Amn.'*(Lnm-Anm*Wn));
                     end
-%                     node{m}.W(k,:) = (AA + squeeze(R(k,:,:)))\(ALAW + dm);
-                    node{m}.Wnew(k,:) = (rho*AA + squeeze(R(k,:,:)))\(ALAW + dm);
+                    
+                    Rtmp = squeeze(R(k,:,:));
+%                     Rtmp = [Rtmp,Rtmp(:,m)];
+%                     Rtmp = [Rtmp;Rtmp(m,1:M),Rtmp(m,m)];
+%                     node{m}.Wnew(k,:) = (rho*AA + squeeze(R(k,:,:)))\(ALAW + dm);
+                    node{m}.Wnew(k,:) = (rho*AA + Rtmp)\(ALAW + dm);
+                    
+                    % Check pdmm using ||Bx-b||^2
 %                     node{m}.Wnew(k,:) = (AA+B(m,:).'*B(m,:))\(ALAW+B(m,:).'*b(m));
-%                     
                     
                     % Lambda update
                     for n=1:Nlen
                         Amn = node{m}.Amn{n};
-%                         Anm = flipud(node{node{m}.N(n)}.Amn{node{node{m}.N(n)}.N==m});
                         Anm = node{node{m}.N(n)}.Amn{node{node{m}.N(n)}.N==m};
                         Wn = node{node{m}.N(n)}.W(k,:).';
                         Wm = node{m}.Wnew(k,:).';
-%                         node{m}.L(k,:,n) = node{n}.L(k,:,m).' - 0.2*(Anm*Wn + Amn*Wm);
-                        node{m}.Lnew(k,:,n) = node{n}.L(k,:,m).' - alpha*(Anm*Wn + Amn*Wm);
+                        node{m}.Lnew(k,:,n) = node{node{m}.N(n)}.L(k,:,node{node{m}.N(n)}.N==m).' - beta*(Anm*Wn + Amn*Wm);
                     end
+                    
+                    % Virtual node update
+                    bk = 2*node{m}.W(k,:)*node{m}.Amn{end}.'*node{m+M}.Amn{1}-node{m+M}.Amn{1}*node{m}.L(k,1,end);
+                    node{m+M}.Wnew(k) = -bk+sign(bk)*min(abs(bk),alpha);
+                    node{m+M}.Lnew(k) = node{m}.L(k,1,end) - (node{m}.Amn{end}*node{m}.W(k,:).' + node{m+M}.Amn{1}*node{m+M}.Wnew(k));
                 end
             end  
         end
-%         % Single bin
-%         Wtmp = zeros(1,M);
-%         for m=1:M-15
-%             node{m}.W(bin,:) = node{m}.Wnew(bin,:);
-%             node{m}.L(bin,:,:) = node{m}.Lnew();
-%             
-%             Wtmp(:,m) = node{m}.W(:,node{m}.N==m);
-%         end
-%         Wsave(:,l,:) = Wtmp;  
-%         
-        % Full Spectrum - Save the new weights to the nodes, and to Wsave for plotting
-        % later.
-        Wtmp = zeros(Khalf,M);
-        
+         
+        % Full Spectrum - Save the new weights to the nodes
         for m=1:M
             dtmp(1,m) = node{m}.d(k);
         end
         for m=1:M
+            % Save the updated W,L for real nodes
             node{m}.W = node{m}.Wnew;
-            node{m}.L = node{m}.Lnew;
+            node{m}.L = node{m}.Lnew;            
+%             ftmp(iter1,m) = 0.5*((node{m}.W(k,:)))*squeeze(R(k,:,:))*(node{m}.W(k,:).')-(dtmp)*(node{m}.W(k,:).');            
+            WsaveAll(iter1,:,m,:) = node{m}.W;
+            LsaveAll(iter1,:,:,:,m) = node{m}.L;     
             
-            Wtmp(:,m) = node{m}.W(:,node{m}.N==m);
-            ftmp(iter1,m) = 0.5*((node{m}.W(k,:)))*squeeze(R(k,:,:))*(node{m}.W(k,:).')-(dtmp)*(node{m}.W(k,:).');
+            % Save the updated W,L for virtual nodes
+            node{m+M}.W = node{m+M}.Wnew;
+            node{m+M}.L = node{m+M}.Lnew;
+            WsaveAllVirt(iter1,:,m) = node{m+M}.W;
+            LsaveAllVirt(iter1,:,m) = node{m+M}.L;
             
-            WsaveAll(iter1,m,:) = node{m}.W(k,:);
-            LsaveAll(iter1,m,:,:) = node{m}.L(k,:,:);
-            
-        end
-%         Wsave(:,iter1,:) = Wtmp;            
-    end
+            % Evaluate objective for each node
+%             virt 
+%             ftmp(iter1,m) = 0.5*((node{m}.W(k,:)))*squeeze(R(k,:,:))*(node{m}.W(k,:).')-(dtmp)*(node{m}.W(k,:).') + norm(virt,1);            
 
-    % Calculate output Y
-%     Y(:,l) = (1/M)*sum(squeeze(conj(Wsave(:,l,:))).*squeeze(X(:,l,:)),2);
-    
+        end
+        W = mean(cat(3,node{1}.W,node{2}.W,node{3}.W),3);
+        for k=1:Khalf
+            f(iter1,k) = 0.5*W(k,:)*squeeze(R(k,:,:))*W(k,:)'-d(k,:)*W(k,:).'+norm(W(k,:),1);
+        end
+    end
 end
 
 
 %% Calculate BF output
-W = mean(cat(3,node{1}.W,node{2}.W,node{3}.W),3);
-
+% W = mean(cat(3,node{1}.W,node{2}.W,node{3}.W),3);
 for l=1:L
     Y(:,l) = (1/M)*sum(squeeze(conj(W)).*squeeze(X(:,l,:)),2);
 end
 Y = [zeros(1,L);Y;zeros(2,L);conj(flipud(Y))];
 y = myOverlapAdd(Y);
-figure; plot(y);
+figure; plot(y); grid on; title('BF output y');
 
 %% MSE between W and Wopt
 % a = length(Wsave(1,:,1))
@@ -306,13 +326,8 @@ figure; plot(y);
 % figure; semilogy(WWoptMSE); grid on; title('WWoptMSE');
 
 %% W vs Wopt full spectrum
-max([max(max(Wopt)),max(max(W))]);
-figure; image(abs(Wopt)); title('Wopt');
-figure; image(abs(squeeze(W)));title('W');
-
-%% W vs Wopt single bin
-% figure; imagesc(abs(squeeze(Wopt(bin,:)))); title('Wopt');
-% figure; imagesc(abs(squeeze(Wsave(bin,Ltmp,:)).'));title('Wsave');
+figure; imagesc(abs(Wopt)); title('Wopt');
+figure; imagesc(abs(squeeze(W)));title('W');
 
 %% MSE between W and Wopt single bin
 % WSaveTmp = squeeze(Wsave(bin,:,:));
@@ -325,16 +340,16 @@ figure; image(abs(squeeze(W)));title('W');
 % figure ; semilogy(WWoptMSE); grid on; title('WWoptMSE single bin');
 
 %% Variance of the sensor weights
-% VarWsave = zeros(M,1);
-% VarWopt = zeros(M,1);
-% for m=1:M
-%     VarWsave(m) = Wsave(:,2,m)'*Wsave(:,2,m);
-%     VarWopt(m) = Wopt(:,m)'*Wopt(:,m);
-% end
-% 
-% figure; plot(VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Variance in sensors'); legend('VarWsave','VarWopt');
-% % ratio = max(VarWsave)/max(VarWopt);
-% % figure; plot((1/ratio)*VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Variance in sensors scaled'); legend('VarWsave','VarWopt');
+VarWsave = zeros(M,1);
+VarWopt = zeros(M,1);
+for m=1:M
+    VarWsave(m) = W(:,m)'*W(:,m);
+    VarWopt(m) = Wopt(:,m)'*Wopt(:,m);
+end
+
+figure; plot(VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Variance in sensors'); legend('VarWsave','VarWopt');
+ratio = max(VarWsave)/max(VarWopt)
+figure; plot((1/ratio)*VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Variance in sensors with Wopt scaled'); legend('VarWsave','VarWopt');
 
 
 %% Print setup for records
@@ -353,24 +368,24 @@ figure; image(abs(squeeze(W)));title('W');
 
 %% 
 % Find ||xi-xiopt|| for all i, note that xiopt is the same for all i
-xi_xiopt_norm = zeros(ITER1,M);
-for iter1=1:ITER1
-    for m=1:M
-        xi_xiopt_norm(iter1,m) = norm(squeeze(WsaveAll(iter1,m,:)) - squeeze(Wopt(bin,:)).');
-%         xi_xiopt_norm(iter1,m) = norm(squeeze(WsaveAll(iter1,m,:)) - (Wopt));
-    end
-end
-% figure; semilogy(xi_xiopt_norm(:,1), '.--'); hold on; semilogy(xi_xiopt_norm(:,2),'.--'); 
-% semilogy(xi_xiopt_norm(:,3),'.--'); grid on; legend('node 1','node 2','node 3'); title('norm(xi-xopt) for i=1,2,3, single bin');
-figure; plot(xi_xiopt_norm(:,1), '.--'); hold on; plot(xi_xiopt_norm(:,2),'.--'); 
-plot(xi_xiopt_norm(:,3),'.--'); grid on; legend('node 1','node 2','node 3'); title('norm(xi-xopt) for i=1,2,3, single bin');
+% xi_xiopt_norm = zeros(ITER1,M);
+% for iter1=1:ITER1
+%     for m=1:M
+%         xi_xiopt_norm(iter1,m) = norm(squeeze(WsaveAll(iter1,m,:)) - squeeze(Wopt(bin,:)).');
+% %         xi_xiopt_norm(iter1,m) = norm(squeeze(WsaveAll(iter1,m,:)) - (Wopt));
+%     end
+% end
+% % figure; semilogy(xi_xiopt_norm(:,1), '.--'); hold on; semilogy(xi_xiopt_norm(:,2),'.--'); 
+% % semilogy(xi_xiopt_norm(:,3),'.--'); grid on; legend('node 1','node 2','node 3'); title('norm(xi-xopt) for i=1,2,3, single bin');
+% figure; plot(xi_xiopt_norm(:,1), '.--'); hold on; plot(xi_xiopt_norm(:,2),'.--'); 
+% plot(xi_xiopt_norm(:,3),'.--'); grid on; legend('node 1','node 2','node 3'); title('norm(xi-xopt) for i=1,2,3, single bin');
 
 
 % Find ||x1-x2|| + ||x1-x3|| + ||x2-x3|| = 0 
 xNormSum = zeros(ITER1,1);
-x1 = squeeze(WsaveAll(:,1,:));
-x2 = squeeze(WsaveAll(:,2,:));
-x3 = squeeze(WsaveAll(:,3,:));
+x1 = squeeze(WsaveAll(:,:,1));
+x2 = squeeze(WsaveAll(:,:,2));
+x3 = squeeze(WsaveAll(:,:,3));
 for iter1=1:ITER1
     xNormSum(iter1) = norm(x1(iter1,:)-x2(iter1,:)) + norm(x1(iter1,:)-x3(iter1,:)) + norm(x2(iter1,:)-x3(iter1,:));
 end
@@ -380,11 +395,30 @@ figure; plot(xNormSum); grid on; title('norm(x1-x2)+norm(x1-x3)+norm(x2-x3), sin
 fprintf('\nfinal norm(x1-x2)+norm(x1-x3)+norm(x2-x3) = %d\n',xNormSum(end));
 
 %%
-% Look at the L's 
-figure; hold on;
-for m=1:M
-    for n=1:M
-        plot((abs(LsaveAll(:,m,1,n)))); 
-    end
+% % Look at the L's 
+% figure; hold on;
+% for m=1:M
+%     for n=1:M
+%         plot((abs(LsaveAll(:,m,1,n)))); 
+%     end
+% end
+% grid on; legend('11','12','13','21','22','23','31','32','33'); title('Lambda values');
+
+%% Check virtual-real node consensus
+% ||x1-x1virt||
+node1RealVirtCons = zeros(ITER1,1);
+node2RealVirtCons = zeros(ITER1,1);
+node3RealVirtCons = zeros(ITER1,1);
+for iter1=1:ITER1
+    node1RealVirtCons(iter1) = norm(WsaveAll(iter1,:,1)-WsaveAllVirt(iter1,:,1));
+    node2RealVirtCons(iter1) = norm(WsaveAll(iter1,:,2)-WsaveAllVirt(iter1,:,2));
+    node3RealVirtCons(iter1) = norm(WsaveAll(iter1,:,3)-WsaveAllVirt(iter1,:,3));
 end
-grid on; legend('11','12','13','21','22','23','31','32','33'); title('Lambda values');
+figure; plot(node1RealVirtCons,'*--'); hold on; plot(node2RealVirtCons,'^--'); plot(node3RealVirtCons,'x--'); grid on; title('Real-Virtual consensus'); legend('1-4','2-5','3-6');
+
+%% Plot objective
+figure; hold on;
+for k=1:Khalf
+    plot(abs(f(:,k)));
+end
+grid on; title('Objective function');
