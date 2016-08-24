@@ -27,7 +27,10 @@
 % say that the sparsity is really working. It looks like it pushes the
 % smaller weights down in comparison to the largest weight
 
-% biadmm1class12.m, make the network consist of local neighbors only. 
+% biadmm1class12.m, make the network consist of local neighbors only. 12 is
+% working and it looks like sparsity is working. I can run 100 sensors (with 
+% min=4,mean=18 neighbors) for one frequency bin very quickly. 200 sensors
+% freezes up the computer, so uses too much memory(?).
 
 close all; clear;
 
@@ -95,7 +98,7 @@ ssd = myGetDist(xloc,sloc);
 [dontcare,nearestSensor] = min(ssd(1,:));
 
 %% Display layout
-myDisplayLayout(xloc,sloc);
+% myDisplayLayout(xloc,sloc);
 
 %% Create ATFs and observations for full fft version
 fdom = (fs/(tl-1)) * (1:(tl-1)/2-1);
@@ -123,7 +126,7 @@ sensd = myFindSensDist(xloc);
 %% Find neighbors, everyone within 0.5*spSize (Aiming for >5 neighbors each, but depends on the number of nodes as well)
 Nneighbors = zeros(M,1);
 for m=1:M
-    node{m}.N = [find(sensd(:,m)<0.4*spSize) ; m+M]; % m+M is the virtual node for node m. Note that the scheme for listing neighbors is smallest number to largest, which means that the virtual node is always last in the neighbor list. It also means the self connection, i.e. where node m sits in node{m}.N can be anywhere except last.
+    node{m}.N = [find(sensd(:,m)<0.35*spSize) ; m+M]; % m+M is the virtual node for node m. Note that the scheme for listing neighbors is smallest number to largest, which means that the virtual node is always last in the neighbor list. It also means the self connection, i.e. where node m sits in node{m}.N can be anywhere except last.
     node{m}.Nlen = length(node{m}.N);
     Nneighbors(m) = node{m}.Nlen;    
     
@@ -225,7 +228,7 @@ yopt = myOverlapAdd(Yopt);
 %% Adaptive algorithm (new based on biadmm_1bin2.m)
 % Ltmp = L; % For shorter run times
 bin = 53;
-ITER1 = 20;
+ITER1 = 200;
 ITER2 = 1;
 
 % % Initialize W to Wopt
@@ -234,9 +237,9 @@ ITER2 = 1;
 % end
 
 % ftmp = zeros(ITER1,M);
-rho = 1.3; % scaling for consensus
+rho = 1.5; % scaling for consensus
 beta = 1; % scaling for lambda consensus
-alpha = 0.5; % scaling for regularization
+alpha = 1; % scaling for regularization
 
 % Check pdmm using ||Bx-b||^2
 % B = randn(M);
@@ -328,9 +331,9 @@ for l=1
             end
             W(:,m) = mean(Wtmp,2);
         end
-%         for k=1:Khalf
-%             f(iter1,k) = 0.5*W(k,:)*squeeze(node{m}.R(k,:,:))*W(k,:)'-d(k,:)*W(k,:).'+norm(W(k,:),1);
-%         end
+        for k=bin
+            f(iter1,k) = 0.5*W(k,:)*squeeze(R(k,:,:))*W(k,:)'-d(k,:)*W(k,:)'+norm(W(k,:),1);
+        end
     end
 end
 
@@ -338,12 +341,12 @@ end
 %% Calculate BF output
 % W = mean(cat(3,node{1}.W,node{2}.W,node{3}.W),3);
 
-for l=1:L
-    Y(:,l) = (1/M)*sum(squeeze(conj(W)).*squeeze(X(:,l,:)),2);
-end
-Y = [zeros(1,L);Y;zeros(2,L);conj(flipud(Y))];
-y = myOverlapAdd(Y);
-figure; plot(y); grid on; title('BF output y');
+% for l=1:L
+%     Y(:,l) = (1/M)*sum(squeeze(conj(W)).*squeeze(X(:,l,:)),2);
+% end
+% Y = [zeros(1,L);Y;zeros(2,L);conj(flipud(Y))];
+% y = myOverlapAdd(Y);
+% figure; plot(y); grid on; title('BF output y');
 
 %% MSE between W and Wopt
 % a = length(Wsave(1,:,1))
@@ -355,8 +358,8 @@ figure; plot(y); grid on; title('BF output y');
 % figure; semilogy(WWoptMSE); grid on; title('WWoptMSE');
 
 %% W vs Wopt full spectrum
-figure; imagesc(abs(Wopt)); title('Wopt');
-figure; imagesc(abs(squeeze(W)));title('W');
+% figure; imagesc(abs(Wopt)); title('Wopt');
+% figure; imagesc(abs(squeeze(W)));title('W');
 
 %% MSE between W and Wopt single bin
 % WSaveTmp = squeeze(Wsave(bin,:,:));
@@ -369,17 +372,32 @@ figure; imagesc(abs(squeeze(W)));title('W');
 % figure ; semilogy(WWoptMSE); grid on; title('WWoptMSE single bin');
 
 %% Variance of the sensor weights
-VarWsave = zeros(M,1);
-VarWopt = zeros(M,1);
+% VarWsave = zeros(M,1);
+% VarWopt = zeros(M,1);
+% for m=1:M
+%     VarWsave(m) = W(:,m)'*W(:,m);
+%     VarWopt(m) = Wopt(:,m)'*Wopt(:,m);
+% end
+% 
+% figure; plot(VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Variance in sensors'); legend('VarWsave','VarWopt');
+% ratio = max(VarWsave)/max(VarWopt)
+% figure; plot((1/ratio)*VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Variance in sensors with Wopt scaled'); legend('VarWsave','VarWopt');
+
+%% Variance of the sensor weights single bin
+% VarWsave = zeros(M,1);
+% VarWopt = zeros(M,1);
 for m=1:M
-    VarWsave(m) = W(:,m)'*W(:,m);
-    VarWopt(m) = Wopt(:,m)'*Wopt(:,m);
+    VarWsave(m) = WsaveAll{end,m}(bin,:)*WsaveAll{end,m}(bin,:)';
+    VarWopt(m) = Wopt(bin,[node{m}.N(1:end-1)])*Wopt(bin,[node{m}.N(1:end-1)])';
 end
 
 figure; plot(VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Variance in sensors'); legend('VarWsave','VarWopt');
 ratio = max(VarWsave)/max(VarWopt)
-figure; plot((1/ratio)*VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Variance in sensors with Wopt scaled'); legend('VarWsave','VarWopt');
+figure; plot((1/ratio)*VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); %title('Variance in sensors with Wopt scaled'); 
+legend('VarWsave','VarWopt');
+xlabel('Sensor number'); ylabel('Variance of sensor weights'); set(gca,'fontsize',14)
 
+cutoff = mean(VarWsave)*1e-1% (min(VarWsave)/max(VarWsave)) % I SHOULD CHANGE THIS, ITS' 
 
 %% Print setup for records
 % fprintf('Nsrcs = %d, K = %d, tls = %d, M = %d, spSize = %d, bin = %d, Ltmp = %d\n\n',Nsrcs,K,tls,M,spSize,bin,Ltmp);
@@ -446,19 +464,56 @@ figure; plot((1/ratio)*VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); t
 % figure; plot(node1RealVirtCons,'*--'); hold on; plot(node2RealVirtCons,'^--'); plot(node3RealVirtCons,'x--'); grid on; title('Real-Virtual consensus'); legend('1-4','2-5','3-6');
 
 %% Plot objective
-% figure; hold on;
-% for k=1:Khalf
-%     plot(abs(f(:,k)));
-% end
-% grid on; title('Objective function');
+figure; hold on;
+for k=bin
+    plot(abs(f(:,k)));
+end
+grid on; %title('Objective function');
+xlabel('Iteration'); ylabel('Objective function value'); set(gca,'fontsize',14);
 
-%% Check consensus for single bin
+%% Check distance from Wopt for single bin
+% figure; hold on; 
+% for m=1:M
+%     for iter1=1:ITER1
+%         normWWopt(m,iter1) = norm(WsaveAll{iter1,m}(bin,:)-Wopt(bin,[node{m}.N(1:end-1)]));
+%     end
+%     plot(normWWopt(m,:));
+% end
+% grid on; title('norm(W-Wopt) single bin');
+
+%% Check consensus across nodes single bin
+% i.e. the sum of the norms of xii-xji for all edges in the network, for
+% one bin. 
+for iter1=1:ITER1
+    for m=1:M
+        norm_xixj = zeros(node{m}.Nlen,1);
+        for n=1:node{m}.Nlen-1            
+            norm_xixj(n) = abs(WsaveAll{iter1,m}(bin,n)-WsaveAll{iter1,node{m}.N(n)}(bin,node{node{m}.N(n)}.N==m));
+        end
+        dist(iter1,m) = sum(norm_xixj);
+    end
+end
+
 figure; hold on; 
 for m=1:M
-    for iter1=1:ITER1
-        normWWopt(m,iter1) = norm(WsaveAll{iter1,m}(bin,:)-Wopt(bin,[node{m}.N(1:end-1)]));
-    end
-    plot(normWWopt(m,:));
+    plot(dist(:,m));
 end
-grid on; title('norm(W-Wopt) single bin');
+grid on; %title('Consensus single bin');
+xlabel('Iteration');ylabel('Sum of differences in weights at each node');set(gca,'fontsize',14);
 
+%% Plot layout with a different colour for nodes with sparsity induced low weights
+remove = VarWsave<cutoff;
+figure; plot3(xloc(1,remove), xloc(2,remove), xloc(3,remove), 'r*'); grid on; hold on; 
+plot3(xloc(1,~remove), xloc(2,~remove), xloc(3,~remove), 'b*');
+plot3(sloc(1,1), sloc(2,1), sloc(3,1), 'go','MarkerSize',10,'MarkerFaceColor','g','MarkerEdgeColor','k'); 
+plot3(sloc(1,2:end), sloc(2,2:end), sloc(3,2:end), 'c^','MarkerSize',10,'MarkerFaceColor','c','MarkerEdgeColor','k'); legend('Sensors-removed','Sensors-kept','Target','Interferer')
+set(gca, 'fontsize', 14); title('Sensor and source location');
+% line([0.1,0.9],[0.1,0.9],[0.1,0.9])
+for m=1:M
+    for n=1:node{m}.Nlen-1
+        if m<node{m}.N(n)
+            temp = [xloc(:,m),xloc(:,node{m}.N(n))];
+            plot3(temp(1,:), temp(2,:), temp(3,:),':','Color',[0,0.7]);
+        end
+    end
+end
