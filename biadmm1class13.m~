@@ -32,7 +32,16 @@
 % min=4,mean=18 neighbors) for one frequency bin very quickly. 200 sensors
 % freezes up the computer, so uses too much memory(?).
 
-close all; clear;
+% biadmm1class12a.m: look at forcing sparsity to use separated mics using
+% two sources and four sensors, two sensors close to each source at the
+% same position, or very close, or the same distance, and use sparsity to
+% cause only two of the sensors to be active. Ideally the regularization
+% would choose one sensor close to each source.
+
+% biadmm1class13.m: Diffuse noise source added
+
+close all; 
+clear;
 
 % Import target audio
 Nsrcs = 10; % Nsrcs = number of sources
@@ -88,7 +97,7 @@ for ns=1:Nsrcs
 end
 
 %% Place sensors
-M = 100; % M = number of sensors (note that the number of nodes will be 2*M to include virtual nodes)
+M = 72; % M = number of sensors (note that the number of nodes will be 2*M to include virtual nodes)
 
 % Create nodes
 node = cell(2*M,1); % 
@@ -99,20 +108,32 @@ end
 spSize = 1; % spSize = size of the room (m)
 space = [spSize, spSize, spSize]'; % Dimensions of the space
 spcDim = length(space);
-xloc = (rand(M,spcDim)*diag(space)).'; % xloc = matrix containing 3d sensor locations
+
+% % Random 3d placement
+% xloc = (rand(M,spcDim)*diag(space)).'; % xloc = matrix containing 3d sensor locations
 sloc = ((rand(Nsrcs,spcDim)*diag(space))).';%+[0,0,2;0,0,2]).'; % sloc = matrix containing 3d source locations
-% sloc =   spSize*[0.1,0.92;
-%                 0.1,0.92;
-%                 0.1,0.92];
+
+% Specific placement
+% sloc =   spSize*[0.1,0.9;
+%                 0.5,0.5;
+%                 0.5,0.5];
 % sloc =   spSize*[0.1;
-%                 0.1;
-%                 0.1];
-% xloc(:,1:3) = spSize*[0.11,0.3,0.91;
-%                       0.11,0.4,0.91;
-%                       0.11,0.5,0.91];
-% xloc = spSize*[0.2,0.1,0.1;
-%                 0.1,0.2,0.1;
-%                 0.1,0.1,0.2];
+%                 0.5;
+%                 0.5];
+% xloc = spSize*[ 0.2,0.2,0.8,0.8;
+%                 0.6,0.6,0.6,0.6;
+%                 0.5,0.5,0.5,0.5];
+
+% 2d Grid placement
+xloctmp = spSize*[combvec(linspace(0,1,sqrt(M/2)),linspace(0,1,sqrt(M/2)));repmat(0,1,M/2)];
+for argh = 1:length(xloctmp,2)
+    xloc(:,argh) = xloctmp(:,argh);
+end
+
+% Load location data from file
+% sloc = load('sloc.txt','-ascii');
+% xloc = load('xloc.txt','-ascii');
+
     
 % Set location for each node
 for m=1:M
@@ -141,7 +162,7 @@ for m=1:M
         Xfft = Xfft + (A .* S{ns});
     end
     Xfft = [0;Xfft;0;0;conj(flipud(Xfft))];
-    x = ifft(Xfft) + 0*randn(tl,1) + 0.001*constantNoise; % 0.001
+    x = ifft(Xfft) + 0*randn(tl,1) + 0*constantNoise; % 0.001
     xsave(:,m) = x;
     xPadded = [zeros((K-1)/2,1);x(1:end-1);zeros((K-1)/2,1)];
     XTmp = stft(xPadded,K);
@@ -154,7 +175,7 @@ sensd = myFindSensDist(xloc);
 %% Find neighbors, everyone within 0.5*spSize (Aiming for >5 neighbors each, but depends on the number of nodes as well)
 Nneighbors = zeros(M,1);
 for m=1:M
-    node{m}.N = [find(sensd(:,m)<0.35*spSize) ; m+M]; % m+M is the virtual node for node m. Note that the scheme for listing neighbors is smallest number to largest, which means that the virtual node is always last in the neighbor list. It also means the self connection, i.e. where node m sits in node{m}.N can be anywhere except last.
+    node{m}.N = [find(sensd(:,m)<0.1*spSize) ; m+M]; % m+M is the virtual node for node m. Note that the scheme for listing neighbors is smallest number to largest, which means that the virtual node is always last in the neighbor list. It also means the self connection, i.e. where node m sits in node{m}.N can be anywhere except last.
     node{m}.Nlen = length(node{m}.N);
     Nneighbors(m) = node{m}.Nlen;    
     
@@ -172,10 +193,10 @@ for k=1:Khalf
         for jj=1:M
             temp1 = norm(xloc(:,ii)-sloc(:,1));
             temp2 = norm(xloc(:,jj)-sloc(:,1));
-            R(k,ii,jj) = exp(-1i*2*pi*fdomShort(k)*(temp1-temp2)/c)/((4*pi)^2 * temp1 * temp2);
+            R(k,ii,jj) = exp(-1i*2*pi*fdomShort(k)*(temp1-temp2)/c)/((4*pi)^2 * temp1 * temp2) + 1e-6*sinc(fdomShort(k)*(temp1-temp2)/c);
         end
     end
-    R(k,:,:) = squeeze(R(k,:,:)) + 1e-3*eye(M);
+    R(k,:,:) = squeeze(R(k,:,:)) ;%+ 1e-3*eye(M);
 end
 
 %% Initialization
@@ -241,6 +262,7 @@ Wopt = zeros(Khalf,M);
 dk = zeros(Khalf,M);
 for k=1:Khalf
     dk = d(k,:).';
+    k
     Wopt(k,:) = (squeeze(R(k,:,:))\dk)/(dk'/squeeze(R(k,:,:))*dk); 
 end
 
@@ -255,7 +277,7 @@ yopt = myOverlapAdd(Yopt);
 
 %% Adaptive algorithm (new based on biadmm_1bin2.m)
 % Ltmp = L; % For shorter run times
-bin = 53;
+bin = 47;
 ITER1 = 100;
 ITER2 = 1;
 
@@ -284,7 +306,7 @@ for l=1
         for k=bin
             for m=1:M
                 for iter2=1:ITER2
-                    [iter1,k,m]
+%                     [iter1,k,m]
                     Nlen = node{m}.Nlen;
                     AA = zeros(Nlen-1);
                     ALAW = zeros(Nlen-1,1);
@@ -530,13 +552,27 @@ grid on; %title('Consensus single bin');
 xlabel('Iteration');ylabel('Sum of differences in weights at each node');set(gca,'fontsize',14);
 
 %% Plot layout with a different colour for nodes with sparsity induced low weights
-remove = VarWsave<cutoff;
-figure; plot3(xloc(1,remove), xloc(2,remove), xloc(3,remove), 'r*'); grid on; hold on; 
-plot3(xloc(1,~remove), xloc(2,~remove), xloc(3,~remove), 'b*');
+% remove = VarWsave<cutoff;
+% figure; plot3(xloc(1,remove), xloc(2,remove), xloc(3,remove), 'rd'); grid on; hold on; 
+% plot3(xloc(1,~remove), xloc(2,~remove), xloc(3,~remove), 'b*');
+
+figure; hold on;
 plot3(sloc(1,1), sloc(2,1), sloc(3,1), 'go','MarkerSize',10,'MarkerFaceColor','g','MarkerEdgeColor','k'); 
-plot3(sloc(1,2:end), sloc(2,2:end), sloc(3,2:end), 'c^','MarkerSize',10,'MarkerFaceColor','c','MarkerEdgeColor','k'); legend('Sensors-removed','Sensors-kept','Target','Interferer')
+plot3(sloc(1,2:end), sloc(2,2:end), sloc(3,2:end), 'c^','MarkerSize',10,'MarkerFaceColor','c','MarkerEdgeColor','k'); 
+legend('Target','Interferer')
+
+
+VarWsaveAdj = VarWsave - min(VarWsave);
+VarWsaveAdj = VarWsaveAdj ./ max(VarWsaveAdj);
+for m=1:M 
+    plot3(xloc(1,m),xloc(2,m),xloc(3,m),'*','Color',[1-VarWsaveAdj(m),1-VarWsaveAdj(m),1-VarWsaveAdj(m)]); 
+    
+end
+
+
 set(gca, 'fontsize', 14); title('Sensor and source location');
 % line([0.1,0.9],[0.1,0.9],[0.1,0.9])
+
 for m=1:M
     for n=1:node{m}.Nlen-1
         if m<node{m}.N(n)
@@ -545,4 +581,5 @@ for m=1:M
         end
     end
 end
-xlabel('x'); ylabel('y'); zlabel('z');
+xlabel('x'); ylabel('y'); zlabel('z'); %grid on;
+axis([0,1,0,1,0,1])
