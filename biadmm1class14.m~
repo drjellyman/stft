@@ -40,11 +40,14 @@
 
 % biadmm1class13.m: Diffuse noise source added
 
+% biadmm1class14.m - can I start from one node and grow? Using a pragmatic
+% approach i.e. 
+
 close all; 
 clear;
 
 % Import target audio
-Nsrcs = 10; % Nsrcs = number of sources
+Nsrcs = 1; % Nsrcs = number of sources
 s = cell(Nsrcs,1);
 AudioFileNames = {'422-122949-0013.flac';
                   '2078-142845-0005.flac';
@@ -97,7 +100,7 @@ for ns=1:Nsrcs
 end
 
 %% Place sensors
-M = 72; % M = number of sensors (note that the number of nodes will be 2*M to include virtual nodes)
+M = 15^2; % M = number of sensors (note that the number of nodes will be 2*M to include virtual nodes)
 
 % Create nodes
 node = cell(2*M,1); % 
@@ -111,7 +114,14 @@ spcDim = length(space);
 
 % % Random 3d placement
 % xloc = (rand(M,spcDim)*diag(space)).'; % xloc = matrix containing 3d sensor locations
-sloc = ((rand(Nsrcs,spcDim)*diag(space))).';%+[0,0,2;0,0,2]).'; % sloc = matrix containing 3d source locations
+% sloc = ((rand(Nsrcs,spcDim)*diag(space))).';%+[0,0,2;0,0,2]).'; % sloc = matrix containing 3d source locations
+
+% Random 2d placement
+% xloc = (rand(M,spcDim-1)*diag(space(1:end-1))).';
+% xloc = [xloc;ones(1,M)];
+sloc = (rand(Nsrcs,spcDim-1)*diag(space(1:end-1))).';
+sloc = [sloc;0.5*ones(1,Nsrcs)];
+
 
 % Specific placement
 % sloc =   spSize*[0.1,0.9;
@@ -124,11 +134,16 @@ sloc = ((rand(Nsrcs,spcDim)*diag(space))).';%+[0,0,2;0,0,2]).'; % sloc = matrix 
 %                 0.6,0.6,0.6,0.6;
 %                 0.5,0.5,0.5,0.5];
 
-% 2d Grid placement
-xloctmp = spSize*[combvec(linspace(0,1,sqrt(M/2)),linspace(0,1,sqrt(M/2)));repmat(0,1,M/2)];
-for argh = 1:length(xloctmp,2)
-    xloc(:,argh) = xloctmp(:,argh);
-end
+% 2d Grid placement with double up 
+% xloctmp = spSize*[combvec(linspace(0,1,sqrt(M/2)),linspace(0,1,sqrt(M/2)));repmat(0,1,M/2)];
+% for argh = 1:length(xloctmp)
+%     xloc(:,2*argh-1) = xloctmp(:,argh);
+%     xloc(:,2*argh) = xloctmp(:,argh);
+% end
+
+% 2d grid placement
+xloc = spSize*[combvec(linspace(0,1,sqrt(M)), linspace(0,1,sqrt(M)));repmat(1,1,M)];
+
 
 % Load location data from file
 % sloc = load('sloc.txt','-ascii');
@@ -175,7 +190,7 @@ sensd = myFindSensDist(xloc);
 %% Find neighbors, everyone within 0.5*spSize (Aiming for >5 neighbors each, but depends on the number of nodes as well)
 Nneighbors = zeros(M,1);
 for m=1:M
-    node{m}.N = [find(sensd(:,m)<0.1*spSize) ; m+M]; % m+M is the virtual node for node m. Note that the scheme for listing neighbors is smallest number to largest, which means that the virtual node is always last in the neighbor list. It also means the self connection, i.e. where node m sits in node{m}.N can be anywhere except last.
+    node{m}.N = [find(sensd(:,m)<0.09*spSize) ; m+M]; % m+M is the virtual node for node m. Note that the scheme for listing neighbors is smallest number to largest, which means that the virtual node is always last in the neighbor list. It also means the self connection, i.e. where node m sits in node{m}.N can be anywhere except last.
     node{m}.Nlen = length(node{m}.N);
     Nneighbors(m) = node{m}.Nlen;    
     
@@ -193,10 +208,10 @@ for k=1:Khalf
         for jj=1:M
             temp1 = norm(xloc(:,ii)-sloc(:,1));
             temp2 = norm(xloc(:,jj)-sloc(:,1));
-            R(k,ii,jj) = exp(-1i*2*pi*fdomShort(k)*(temp1-temp2)/c)/((4*pi)^2 * temp1 * temp2) + 1e-6*sinc(fdomShort(k)*(temp1-temp2)/c);
+            R(k,ii,jj) = exp(-1i*2*pi*fdomShort(k)*(temp1-temp2)/c)/((4*pi)^2 * temp1 * temp2) ;%+ 1e-2*sinc(fdomShort(k)*(temp1-temp2)/c);
         end
     end
-    R(k,:,:) = squeeze(R(k,:,:)) ;%+ 1e-3*eye(M);
+    R(k,:,:) = squeeze(R(k,:,:)) ;%+ 1e-5*eye(M);
 end
 
 %% Initialization
@@ -277,8 +292,8 @@ yopt = myOverlapAdd(Yopt);
 
 %% Adaptive algorithm (new based on biadmm_1bin2.m)
 % Ltmp = L; % For shorter run times
-bin = 47;
-ITER1 = 100;
+bin = 53;
+ITER1 = 30;
 ITER2 = 1;
 
 % % Initialize W to Wopt
@@ -287,8 +302,8 @@ ITER2 = 1;
 % end
 
 % ftmp = zeros(ITER1,M);
-rho = 1.5; % scaling for consensus
-beta = 1; % scaling for lambda consensus
+rho = 1.5; % scaling for consensus 1.5
+beta = 1; % scaling for lambda consensus 1
 alpha =1; % scaling for regularization
 
 % Check pdmm using ||Bx-b||^2
@@ -343,6 +358,7 @@ for l=1
                     
                     % Virtual node update
                     bk = 2*node{m}.W(k,:)*node{m}.Amn{end}.'*node{m+M}.Amn{1}-node{m+M}.Amn{1}*node{m}.L(k,1,end);
+                    abs(bk)
                     node{m+M}.Wnew(k) = -bk+sign(bk)*min(abs(bk),alpha);
                     node{m+M}.Lnew(k) = node{m}.L(k,1,end) - (node{m}.Amn{end}*node{m}.W(k,:).' + node{m+M}.Amn{1}*node{m+M}.Wnew(k));
                 end
@@ -583,3 +599,6 @@ for m=1:M
 end
 xlabel('x'); ylabel('y'); zlabel('z'); %grid on;
 axis([0,1,0,1,0,1])
+
+%% Look at covariance with diffuse noise single bin
+figure; imagesc(abs(squeeze((R(bin,:,:)))))

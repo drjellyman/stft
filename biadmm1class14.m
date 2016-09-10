@@ -40,6 +40,9 @@
 
 % biadmm1class13.m: Diffuse noise source added
 
+% biadmm1class14.m - can I start from one node and grow? Using a pragmatic
+% approach i.e. a condition on inclusion, not part of the objective. 
+
 close all; 
 clear;
 
