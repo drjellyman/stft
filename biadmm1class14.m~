@@ -41,13 +41,13 @@
 % biadmm1class13.m: Diffuse noise source added
 
 % biadmm1class14.m - can I start from one node and grow? Using a pragmatic
-% approach i.e. 
+% approach i.e. a condition on inclusion, not part of the objective. 
 
 close all; 
 clear;
 
 % Import target audio
-Nsrcs = 1; % Nsrcs = number of sources
+Nsrcs = 2; % Nsrcs = number of sources
 s = cell(Nsrcs,1);
 AudioFileNames = {'422-122949-0013.flac';
                   '2078-142845-0005.flac';
@@ -92,6 +92,13 @@ for ns=1:Nsrcs
     s{ns} = s{ns}(1:tl);
 end
 
+% % Normalize the truncated sources to have equal variance of 1. 
+% for ns = 2:Nsrcs
+%     s{ns} = s{ns}*(sqrt((s{1}.'*s{1})/(s{ns}.'*s{ns})));
+% end
+% s{1}.'*s{1}
+% s{2}.'*s{2}
+
 %% FFT
 S = cell(Nsrcs,1);
 for ns=1:Nsrcs
@@ -100,7 +107,7 @@ for ns=1:Nsrcs
 end
 
 %% Place sensors
-M = 15^2; % M = number of sensors (note that the number of nodes will be 2*M to include virtual nodes)
+M = 12^2; % M = number of sensors (note that the number of nodes will be 2*M to include virtual nodes)
 
 % Create nodes
 node = cell(2*M,1); % 
@@ -123,6 +130,7 @@ sloc = (rand(Nsrcs,spcDim-1)*diag(space(1:end-1))).';
 sloc = [sloc;0.5*ones(1,Nsrcs)];
 
 
+
 % Specific placement
 % sloc =   spSize*[0.1,0.9;
 %                 0.5,0.5;
@@ -142,7 +150,7 @@ sloc = [sloc;0.5*ones(1,Nsrcs)];
 % end
 
 % 2d grid placement
-xloc = spSize*[combvec(linspace(0,1,sqrt(M)), linspace(0,1,sqrt(M)));repmat(1,1,M)];
+xloc = spSize*[combvec(linspace(0,1,sqrt(M)), linspace(0,1,sqrt(M)));repmat(1,1,M)]+(0.01*randn(3,M));
 
 
 % Load location data from file
@@ -190,7 +198,7 @@ sensd = myFindSensDist(xloc);
 %% Find neighbors, everyone within 0.5*spSize (Aiming for >5 neighbors each, but depends on the number of nodes as well)
 Nneighbors = zeros(M,1);
 for m=1:M
-    node{m}.N = [find(sensd(:,m)<0.09*spSize) ; m+M]; % m+M is the virtual node for node m. Note that the scheme for listing neighbors is smallest number to largest, which means that the virtual node is always last in the neighbor list. It also means the self connection, i.e. where node m sits in node{m}.N can be anywhere except last.
+    node{m}.N = [find(sensd(:,m)<1.7*(spSize/(sqrt(M)-1))) ; m+M]; % m+M is the virtual node for node m. Note that the scheme for listing neighbors is smallest number to largest, which means that the virtual node is always last in the neighbor list. It also means the self connection, i.e. where node m sits in node{m}.N can be anywhere except last.
     node{m}.Nlen = length(node{m}.N);
     Nneighbors(m) = node{m}.Nlen;    
     
@@ -198,7 +206,7 @@ for m=1:M
     node{m+M}.N = [m,m+M];
     node{m+M}.Nlen = 2;
 end
-fprintf('The minimum number of neighbors was %d. \nThe mean number of neighbors was %d. \n\n',min(Nneighbors),mean(Nneighbors));
+fprintf('\nThe minimum number of neighbors was %d. \nThe mean number of neighbors was %d. \n\n',min(Nneighbors),mean(Nneighbors));
 
 %% Covariance based only on sensor and source location
 fdomShort = (fs/(K-1)) * (1:((K-1)/2)-1);
@@ -208,10 +216,10 @@ for k=1:Khalf
         for jj=1:M
             temp1 = norm(xloc(:,ii)-sloc(:,1));
             temp2 = norm(xloc(:,jj)-sloc(:,1));
-            R(k,ii,jj) = exp(-1i*2*pi*fdomShort(k)*(temp1-temp2)/c)/((4*pi)^2 * temp1 * temp2) ;%+ 1e-2*sinc(fdomShort(k)*(temp1-temp2)/c);
+            R(k,ii,jj) = exp(-1i*2*pi*fdomShort(k)*(temp1-temp2)/c)/((4*pi)^2 * temp1 * temp2) ;%+ 1e-1*sinc(fdomShort(k)*(temp1-temp2)/c);
         end
     end
-    R(k,:,:) = squeeze(R(k,:,:)) ;%+ 1e-5*eye(M);
+    R(k,:,:) = squeeze(R(k,:,:)) + 1e-9*eye(M);
 end
 
 %% Initialization
@@ -277,7 +285,6 @@ Wopt = zeros(Khalf,M);
 dk = zeros(Khalf,M);
 for k=1:Khalf
     dk = d(k,:).';
-    k
     Wopt(k,:) = (squeeze(R(k,:,:))\dk)/(dk'/squeeze(R(k,:,:))*dk); 
 end
 
@@ -293,7 +300,7 @@ yopt = myOverlapAdd(Yopt);
 %% Adaptive algorithm (new based on biadmm_1bin2.m)
 % Ltmp = L; % For shorter run times
 bin = 53;
-ITER1 = 30;
+ITER1 = 60;
 ITER2 = 1;
 
 % % Initialize W to Wopt
@@ -302,9 +309,9 @@ ITER2 = 1;
 % end
 
 % ftmp = zeros(ITER1,M);
-rho = 1.5; % scaling for consensus 1.5
-beta = 1; % scaling for lambda consensus 1
-alpha =1; % scaling for regularization
+rho = 2; % scaling for consensus 1.5
+beta = 1.5; % scaling for lambda consensus 1
+alpha = 0.09; % scaling for regularization
 
 % Check pdmm using ||Bx-b||^2
 % B = randn(M);
@@ -357,9 +364,16 @@ for l=1
                     end
                     
                     % Virtual node update
-                    bk = 2*node{m}.W(k,:)*node{m}.Amn{end}.'*node{m+M}.Amn{1}-node{m+M}.Amn{1}*node{m}.L(k,1,end);
-                    abs(bk)
+%                     bk = 2*node{m}.W(k,:)*node{m}.Amn{end}.'*node{m+M}.Amn{1}-node{m+M}.Amn{1}*node{m}.L(k,1,end);
+%                     bk = node{m}.W(k,:)*node{m}.Amn{end}.'*node{m+M}.Amn{1}-node{m+M}.Amn{1}*node{m}.L(k,1,end);
+%                     node{m+M}.Wnew(k) = -bk+sign(bk)*min(abs(bk),alpha);
+
+%                     node{m+M}.Wnew(k) = node{m}.Amn{end}*node{m}.W(k,:).'+node{m}.L(k,1,end)-sign(node{m}.Amn{end}*node{m}.W(k,:).'+node{m}.L(k,1,end)-alpha)*alpha;
+
+                    bk = node{m+M}.Amn{1}*(node{m}.Amn{end}*node{m}.W(k,:).'-node{m}.L(k,1,end));
+%                     abs(bk)
                     node{m+M}.Wnew(k) = -bk+sign(bk)*min(abs(bk),alpha);
+
                     node{m+M}.Lnew(k) = node{m}.L(k,1,end) - (node{m}.Amn{end}*node{m}.W(k,:).' + node{m+M}.Amn{1}*node{m+M}.Wnew(k));
                 end
             end  
@@ -406,13 +420,24 @@ end
 
 %% Calculate BF output
 % W = mean(cat(3,node{1}.W,node{2}.W,node{3}.W),3);
-
+% 
 % for l=1:L
 %     Y(:,l) = (1/M)*sum(squeeze(conj(W)).*squeeze(X(:,l,:)),2);
 % end
 % Y = [zeros(1,L);Y;zeros(2,L);conj(flipud(Y))];
 % y = myOverlapAdd(Y);
 % figure; plot(y); grid on; title('BF output y');
+
+%%
+% figure; plot(s{1})
+
+%%
+% S_fvst = stft(s{1},K);
+% S_fvst = S_fvst(1:(K-3)/2,:);
+% figure; plot(abs(S_fvst(bin,:)),'.--');
+% zeta = max(abs(S_fvst(bin,:)))/max(abs(Y(54,:)));
+% hold on; plot(zeta*abs(Y(54,2:end)),'o--')
+
 
 %% MSE between W and Wopt
 % a = length(Wsave(1,:,1))
@@ -456,14 +481,19 @@ for m=1:M
     VarWsave(m) = WsaveAll{end,m}(bin,:)*WsaveAll{end,m}(bin,:)';
     VarWopt(m) = Wopt(bin,[node{m}.N(1:end-1)])*Wopt(bin,[node{m}.N(1:end-1)])';
 end
+for m=1:M
+    for iter1=1:ITER1
+        VarWsaveAll(m,iter1) = WsaveAll{iter1,m}(bin,:)*WsaveAll{iter1,m}(bin,:)';
+    end
+end
 
 figure; plot(VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); title('Variance in sensors'); legend('VarWsave','VarWopt');
-ratio = max(VarWsave)/max(VarWopt)
+ratio = max(VarWsave)/max(VarWopt);
 figure; plot((1/ratio)*VarWsave,'*--'); grid on; hold on; plot(VarWopt,'o--'); %title('Variance in sensors with Wopt scaled'); 
 legend('VarWsave','VarWopt');
 xlabel('Sensor number'); ylabel('Variance of sensor weights'); set(gca,'fontsize',14)
 
-cutoff = mean(VarWsave)*1.6e-1% (min(VarWsave)/max(VarWsave)) % I SHOULD CHANGE THIS
+% cutoff = mean(VarWsave)*1.6e-1% (min(VarWsave)/max(VarWsave)) % I SHOULD CHANGE THIS
 
 %% Print setup for records
 % fprintf('Nsrcs = %d, K = %d, tls = %d, M = %d, spSize = %d, bin = %d, Ltmp = %d\n\n',Nsrcs,K,tls,M,spSize,bin,Ltmp);
@@ -577,17 +607,24 @@ plot3(sloc(1,1), sloc(2,1), sloc(3,1), 'go','MarkerSize',10,'MarkerFaceColor','g
 plot3(sloc(1,2:end), sloc(2,2:end), sloc(3,2:end), 'c^','MarkerSize',10,'MarkerFaceColor','c','MarkerEdgeColor','k'); 
 legend('Target','Interferer')
 
+% For the final weighted sensor location image
+% VarWsaveAdj = VarWsave - min(VarWsave);
+% VarWsaveAdj = VarWsaveAdj ./ max(VarWsaveAdj);
+% for m=1:M 
+%     plot3(xloc(1,m),xloc(2,m),xloc(3,m),'*','Color',[1-VarWsaveAdj(m),1-VarWsaveAdj(m),1-VarWsaveAdj(m)]); 
+% end
 
-VarWsaveAdj = VarWsave - min(VarWsave);
-VarWsaveAdj = VarWsaveAdj ./ max(VarWsaveAdj);
-for m=1:M 
-    plot3(xloc(1,m),xloc(2,m),xloc(3,m),'*','Color',[1-VarWsaveAdj(m),1-VarWsaveAdj(m),1-VarWsaveAdj(m)]); 
-    
+% For the weighted sensor location movie
+VarWsaveAdj = VarWsaveAll - repmat(min(VarWsaveAll),M,1);
+VarWsaveAdj = VarWsaveAdj ./ repmat(max(VarWsaveAdj),M,1);
+for iter1=ITER1%1:ITER1
+    for m=1:M 
+        plot3(xloc(1,m),xloc(2,m),xloc(3,m),'*','Color',[1-VarWsaveAdj(m,iter1),1-VarWsaveAdj(m,iter1),1-VarWsaveAdj(m,iter1)]); 
+    end
+    VarMov(iter1) = getframe;
 end
 
-
 set(gca, 'fontsize', 14); title('Sensor and source location');
-% line([0.1,0.9],[0.1,0.9],[0.1,0.9])
 
 for m=1:M
     for n=1:node{m}.Nlen-1
@@ -598,7 +635,75 @@ for m=1:M
     end
 end
 xlabel('x'); ylabel('y'); zlabel('z'); %grid on;
-axis([0,1,0,1,0,1])
+% axis([0,1,0,1,0,1])
+
+
 
 %% Look at covariance with diffuse noise single bin
 figure; imagesc(abs(squeeze((R(bin,:,:)))))
+
+%%
+% fig=figure; 
+% movie(fig,VarMov,1,25)
+
+% figure; 
+% image(VarMov(30).cdata)
+
+%%
+% node{89}.d(bin)'*node{89}.W(bin,node{89}.N==89)
+
+%% Find input SIR
+[mindist,mindisti] = min(ssd(1,:));
+
+% Get stft of the sources
+Target = stft(s{1}(1:tl),K);
+Target = Target(2:(K-1)/2,:);
+Target = Target(bin,:);
+Interferer = stft(s{2}(1:tl),K);
+Interferer = Interferer(2:(K-1)/2,:);
+Interferer = Interferer(bin,:);
+dT = exp(-1i*2*pi*fdomShort(bin)*ssd(1,mindisti)/c)/(4*pi*ssd(1,mindisti));
+dI = exp(-1i*2*pi*fdomShort(bin)*ssd(2,mindisti)/c)/(4*pi*ssd(2,mindisti));
+
+iSIR = 10*log10((Target*dT*dT'*Target')/(Interferer*dI*dI'*Interferer'));
+iSIRtf = 10*log10((dT'*dT)/(dI'*dI));
+iSIRnotf = 10*log10((Target*Target')/(Interferer*Interferer'));
+
+%% Find output SIR
+weights = W(bin,:);
+dT = exp(-1i*2*pi*fdomShort(bin)*ssd(1,:)/c)./(4*pi*ssd(1,:));
+dI = exp(-1i*2*pi*fdomShort(bin)*ssd(2,:)/c)./(4*pi*ssd(2,:));
+xT = (dT.'*Target).';
+xI = (dI.'*Interferer).';
+num = sum(repmat(weights',1,L-2).*xT.');
+den = sum(repmat(weights',1,L-2).*xI.');
+
+oSIR = 10*log10((num*num')/(den*den'));
+oSIRtf = 10*log10((conj(dT)*weights.'*conj(weights)*dT.')/(conj(dI)*weights.'*conj(weights)*dI.'));
+SIRGain = oSIR-iSIR;
+SIRGaintf = oSIRtf-iSIRtf;
+
+table([iSIR;oSIR;SIRGain],[iSIRtf;oSIRtf;SIRGaintf],[iSIRnotf;0;0],'RowNames',{'Input';'Output';'Gain'},'VariableNames',{'SIR';'SIRtf';'SIRnotf'})
+
+%% 
+
+% Normalize the truncated sources to have equal variance of 1. 
+for ns = 2:Nsrcs
+    s{ns} = s{ns}*(sqrt((s{1}.'*s{1})/(s{ns}.'*s{ns})));
+end
+s{1}.'*s{1}
+s{2}.'*s{2}
+
+%%
+s5dB = s{1}*sqrt(10^(5/10));
+s10dB = s{1}*sqrt(10^(10/10);
+s15dB = s{1}*sqrt(10^(15/10);
+s20dB = s{1}*sqrt(10^(20/10);
+s25dB = s{1}*sqrt(10^(25/10);
+s30dB = s{1}*10^(30/10);
+10*log10((s5dB.'*s5dB)/(s{2}.'*s{2}))
+10*log10((s10dB.'*s10dB)/(s{2}.'*s{2}))
+10*log10((s15dB.'*s15dB)/(s{2}.'*s{2}))
+10*log10((s20dB.'*s20dB)/(s{2}.'*s{2}))
+10*log10((s25dB.'*s25dB)/(s{2}.'*s{2}))
+10*log10((s30dB.'*s30dB)/(s{2}.'*s{2}))
