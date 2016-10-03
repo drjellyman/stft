@@ -621,7 +621,7 @@ for iter1=ITER1%1:ITER1
     for m=1:M 
         plot3(xloc(1,m),xloc(2,m),xloc(3,m),'*','Color',[1-VarWsaveAdj(m,iter1),1-VarWsaveAdj(m,iter1),1-VarWsaveAdj(m,iter1)]); 
     end
-    VarMov(iter1) = getframe;
+%     VarMov(iter1) = getframe;
 end
 
 set(gca, 'fontsize', 14); title('Sensor and source location');
